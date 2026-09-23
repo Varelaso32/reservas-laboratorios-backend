@@ -41,6 +41,7 @@ Cada paso queda en el historial: CREADA, APROBADA, RECHAZADA.
 | 4 | HU-08 y HU-09 (SCRUM-77, SCRUM-79): pendientes del aprobador y detalle de una solicitud | GET /api/v1/solicitudes/pendientes, GET /api/v1/solicitudes/{solicitud_id} |
 | 5 | HU-10, HU-13 y HU-11 (SCRUM-81, SCRUM-85, SCRUM-83): aprobar con reserva automática y rechazar con motivo. Registros APROBADA y RECHAZADA en el historial | POST /api/v1/solicitudes/{solicitud_id}/aprobar, POST /api/v1/solicitudes/{solicitud_id}/rechazar |
 | 6 | HU-14 (SCRUM-86): reservas activas del usuario y detalle de una reserva | GET /api/v1/reservas/mias, GET /api/v1/reservas/{reserva_id} |
+| 7 | HU-24 (SCRUM-88): consulta del historial de una solicitud o de una reserva. Con esto se completan las 10 tareas de backend de la iteración | GET /api/v1/solicitudes/{solicitud_id}/historial, GET /api/v1/reservas/{reserva_id}/historial |
 
 ## Índice de endpoints
 
@@ -59,6 +60,8 @@ Cada paso queda en el historial: CREADA, APROBADA, RECHAZADA.
 | POST | /api/v1/solicitudes/{solicitud_id}/rechazar | Rechazar con motivo | APROBADOR (sus espacios) | HU-11 | 5 |
 | GET | /api/v1/reservas/mias | Mis reservas activas | SOLICITANTE | HU-14 | 6 |
 | GET | /api/v1/reservas/{reserva_id} | Detalle de una reserva | SOLICITANTE (las suyas), APROBADOR (sus espacios), ADMIN (todas) | HU-14 | 6 |
+| GET | /api/v1/solicitudes/{solicitud_id}/historial | Historial de una solicitud | SOLICITANTE (las suyas), APROBADOR (sus espacios), ADMIN (todas) | HU-24 | 7 |
+| GET | /api/v1/reservas/{reserva_id}/historial | Historial de una reserva | SOLICITANTE (las suyas), APROBADOR (sus espacios), ADMIN (todas) | HU-24 | 7 |
 
 ## Autenticación
 
@@ -335,6 +338,50 @@ Quién puede verla: SOLICITANTE (las suyas), APROBADOR (las de sus espacios), AD
 | Código | Cuándo |
 |---|---|
 | 200 | Detalle de la reserva |
+| 401 | No autenticado |
+| 404 | La reserva no existe o el usuario no tiene acceso (mismo mensaje en ambos casos) |
+| 422 | El id no es un número |
+
+## Historial
+
+HU-24. Cada acción sobre una solicitud queda registrada: CREADA (fase 3),
+APROBADA y RECHAZADA (fase 5). La acción CANCELADA está preparada en el modelo y se
+usará cuando exista la historia de cancelación. El historial no se puede modificar
+ni borrar: la base de datos lo impide.
+
+Nota: la solicitud #1 la crea el script de datos de prueba directamente en la base,
+sin pasar por la API, así que su historial aparece vacío.
+
+### GET /api/v1/solicitudes/{solicitud_id}/historial
+
+Secuencia de acciones de una solicitud, en orden cronológico.
+
+Respuesta 200:
+- solicitud_id
+- reserva_id: la reserva generada, o null si no se aprobó.
+- acciones: lista con orden (1, 2, ...), accion, usuario_id, usuario_nombre,
+  usuario_rol, estado_anterior, estado_nuevo, detalle (por ejemplo el motivo del
+  rechazo o "Reserva #N generada"), reserva_id y fecha (hora de Colombia).
+
+Quién puede verlo: SOLICITANTE (sus solicitudes), APROBADOR (las de sus espacios), ADMIN (todas).
+
+| Código | Cuándo |
+|---|---|
+| 200 | Historial de la solicitud (acciones puede ser una lista vacía) |
+| 401 | No autenticado |
+| 404 | La solicitud no existe o el usuario no tiene acceso (mismo mensaje en ambos casos) |
+| 422 | El id no es un número |
+
+### GET /api/v1/reservas/{reserva_id}/historial
+
+Mismo formato. Devuelve la secuencia de la solicitud que generó la reserva, desde
+su creación hasta la aprobación.
+
+Quién puede verlo: SOLICITANTE (sus reservas), APROBADOR (las de sus espacios), ADMIN (todas).
+
+| Código | Cuándo |
+|---|---|
+| 200 | Historial de la reserva |
 | 401 | No autenticado |
 | 404 | La reserva no existe o el usuario no tiene acceso (mismo mensaje en ambos casos) |
 | 422 | El id no es un número |
