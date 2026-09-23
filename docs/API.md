@@ -21,8 +21,14 @@ Este archivo se actualiza al terminar cada fase.
 | 401 | Falta el token, no es válido o expiró |
 | 403 | El usuario no tiene el rol necesario o está inactivo |
 | 404 | El recurso no existe, no está activo o el usuario no tiene acceso a él |
-| 409 | Conflicto: el espacio está ocupado o ya existe una solicitud pendiente que se cruza |
+| 409 | Conflicto: espacio ocupado, solicitud pendiente que se cruza, solicitud ya decidida o vencida |
 | 422 | Datos de entrada inválidos |
+
+## Flujo de una solicitud
+
+PENDIENTE → APROBADA (genera una reserva ACTIVA) o RECHAZADA (con motivo, sin reserva).
+Una solicitud APROBADA o RECHAZADA ya no se puede volver a decidir.
+Cada paso queda en el historial: CREADA, APROBADA, RECHAZADA.
 
 ## Cambios por fase
 
@@ -33,6 +39,7 @@ Este archivo se actualiza al terminar cada fase.
 | 2 | Login y roles con JWT | POST /api/v1/auth/login, GET /api/v1/auth/me |
 | 3 | HU-04 y HU-05 (SCRUM-73, SCRUM-75): crear solicitud, validar disponibilidad y mis solicitudes. Registro CREADA en el historial | POST /api/v1/solicitudes/, GET /api/v1/solicitudes/mias, GET /api/v1/espacios/{espacio_id}/disponibilidad |
 | 4 | HU-08 y HU-09 (SCRUM-77, SCRUM-79): pendientes del aprobador y detalle de una solicitud | GET /api/v1/solicitudes/pendientes, GET /api/v1/solicitudes/{solicitud_id} |
+| 5 | HU-10, HU-13 y HU-11 (SCRUM-81, SCRUM-85, SCRUM-83): aprobar con reserva automática y rechazar con motivo. Registros APROBADA y RECHAZADA en el historial | POST /api/v1/solicitudes/{solicitud_id}/aprobar, POST /api/v1/solicitudes/{solicitud_id}/rechazar |
 
 ## Índice de endpoints
 
@@ -47,6 +54,8 @@ Este archivo se actualiza al terminar cada fase.
 | GET | /api/v1/solicitudes/mias | Mis solicitudes | SOLICITANTE | HU-10.6, HU-11.7 | 3 |
 | GET | /api/v1/solicitudes/pendientes | Pendientes de mis espacios | APROBADOR | HU-08 | 4 |
 | GET | /api/v1/solicitudes/{solicitud_id} | Detalle de una solicitud | APROBADOR (sus espacios), SOLICITANTE (las suyas), ADMIN (todas) | HU-09 | 4 |
+| POST | /api/v1/solicitudes/{solicitud_id}/aprobar | Aprobar y generar la reserva | APROBADOR (sus espacios) | HU-10, HU-13 | 5 |
+| POST | /api/v1/solicitudes/{solicitud_id}/rechazar | Rechazar con motivo | APROBADOR (sus espacios) | HU-11 | 5 |
 
 ## Autenticación
 
@@ -96,7 +105,7 @@ Respuesta 200: lista de espacios con id, nombre, tipo, capacidad y ubicacion.
 ### GET /api/v1/espacios/disponibles
 
 Devuelve los espacios activos que no tienen una reserva activa que se cruce con el
-horario pedido.
+horario pedido. Al aprobarse una solicitud, su espacio deja de aparecer en ese horario.
 
 | Parámetro | Tipo | Requerido | Descripción |
 |---|---|---|---|
@@ -166,8 +175,6 @@ Respuesta 201: la solicitud (id, espacio_id, espacio_nombre, inicio, fin, propos
 asistentes, equipamiento, estado, motivo_rechazo, fecha_decision, creada_en) más
 "mensaje": "Solicitud #N registrada. Quedó en estado PENDIENTE."
 
-La creación queda en el historial con la acción CREADA.
-
 | Código | Cuándo |
 |---|---|
 | 201 | Solicitud registrada |
@@ -182,9 +189,8 @@ Ejemplo de cuerpo:
 
 ### GET /api/v1/solicitudes/mias
 
-Devuelve las solicitudes del usuario que inició sesión, de la más reciente a la más
-antigua. Solo rol SOLICITANTE. Sirve para que el solicitante vea si su solicitud fue
-aprobada y el motivo si fue rechazada.
+Solicitudes del usuario que inició sesión, de la más reciente a la más antigua.
+Solo rol SOLICITANTE. Muestra si fue aprobada y, si fue rechazada, el motivo.
 
 | Parámetro | Tipo | Requerido | Descripción |
 |---|---|---|---|
@@ -198,18 +204,18 @@ aprobada y el motivo si fue rechazada.
 
 ### GET /api/v1/solicitudes/pendientes
 
-HU-08. Solicitudes en estado PENDIENTE de los espacios que administra el aprobador
-que inició sesión. Solo rol APROBADOR. No muestra solicitudes de otros espacios.
+HU-08. Solicitudes PENDIENTE de los espacios que administra el aprobador. Solo rol
+APROBADOR. No muestra solicitudes de otros espacios.
 
 | Parámetro | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| espacio_id | entero | No | Filtra por un espacio. Si es un espacio que no administra, devuelve [] |
+| espacio_id | entero | No | Filtra por un espacio. Si no lo administra, devuelve [] |
 
 Cada elemento trae: id, estado, solicitante (id, nombre, email, cargo), espacio
 (id, nombre, tipo, capacidad, ubicacion), inicio, fin, asistentes, creada_en y
 vencida. Orden: por hora de inicio, las más próximas primero.
 
-vencida = true significa que la hora de inicio ya pasó: la solicitud ya no se puede aprobar.
+vencida = true: la hora de inicio ya pasó; solo se puede rechazar.
 
 | Código | Cuándo |
 |---|---|
@@ -219,13 +225,10 @@ vencida = true significa que la hora de inicio ya pasó: la solicitud ya no se p
 
 ### GET /api/v1/solicitudes/{solicitud_id}
 
-HU-09. Detalle completo de una solicitud: todo lo de la lista de pendientes más
-proposito, equipamiento, motivo_rechazo, decidido_por (nombre) y fecha_decision.
+HU-09. Detalle completo: todo lo de la lista de pendientes más proposito,
+equipamiento, motivo_rechazo, decidido_por (nombre) y fecha_decision.
 
-Quién puede verla:
-- APROBADOR: solo solicitudes de los espacios que administra.
-- SOLICITANTE: solo las suyas.
-- ADMIN: todas.
+Quién puede verla: APROBADOR (sus espacios), SOLICITANTE (las suyas), ADMIN (todas).
 
 | Código | Cuándo |
 |---|---|
@@ -233,6 +236,68 @@ Quién puede verla:
 | 401 | No autenticado |
 | 404 | La solicitud no existe o el usuario no tiene acceso (mismo mensaje en ambos casos) |
 | 422 | El id no es un número |
+
+### POST /api/v1/solicitudes/{solicitud_id}/aprobar
+
+HU-10 y HU-13. Aprueba una solicitud PENDIENTE y en la misma operación genera la
+reserva ACTIVA a nombre del solicitante, con el mismo espacio, fecha y horario.
+Solo rol APROBADOR, y solo en espacios que administra. No lleva cuerpo.
+
+Validaciones, en este orden:
+1. La solicitud existe y es de un espacio que administra (si no, 404).
+2. Está PENDIENTE (si ya se aprobó o rechazó, 409).
+3. No está vencida (si su hora de inicio ya pasó, 409: solo se puede rechazar).
+4. El espacio sigue activo (si no, 409).
+5. El espacio sigue libre en ese horario (si otra solicitud ya se aprobó para ese horario, 409).
+
+Si dos aprobaciones del mismo horario llegan al mismo tiempo, solo una pasa; la
+otra recibe 409 y su solicitud queda PENDIENTE. Una solicitud nunca genera más
+de una reserva.
+
+Respuesta 200:
+- mensaje: "Solicitud #N aprobada. Se generó la reserva #M."
+- solicitud: el detalle completo, con estado APROBADA, decidido_por y fecha_decision.
+- reserva: id, solicitud_id, espacio_id, espacio_nombre, inicio, fin y estado ACTIVA.
+
+Queda en el historial la acción APROBADA, enlazada a la reserva.
+
+| Código | Cuándo |
+|---|---|
+| 200 | Aprobada y reserva generada |
+| 401 | No autenticado |
+| 403 | El usuario no es APROBADOR |
+| 404 | No existe o no es de un espacio que administra |
+| 409 | Ya decidida, vencida, espacio inactivo o ya reservado en ese horario |
+| 422 | El id no es un número |
+
+### POST /api/v1/solicitudes/{solicitud_id}/rechazar
+
+HU-11. Rechaza una solicitud PENDIENTE. Solo rol APROBADOR, y solo en espacios que
+administra. El motivo es obligatorio. Un rechazo nunca genera reserva. Se puede
+rechazar aunque esté vencida.
+
+Cuerpo JSON:
+
+| Campo | Tipo | Requerido | Descripción |
+|---|---|---|---|
+| motivo | texto (1 a 500) | Sí | Por qué se rechaza. No puede ser solo espacios |
+
+Respuesta 200: mensaje ("Solicitud #N rechazada.") y solicitud (detalle completo,
+con estado RECHAZADA, motivo_rechazo, decidido_por y fecha_decision).
+
+El solicitante ve el motivo en /solicitudes/mias y en el detalle. Queda en el
+historial la acción RECHAZADA con el motivo.
+
+| Código | Cuándo |
+|---|---|
+| 200 | Rechazada |
+| 401 | No autenticado |
+| 403 | El usuario no es APROBADOR |
+| 404 | No existe o no es de un espacio que administra |
+| 409 | La solicitud ya no está pendiente |
+| 422 | Falta el motivo o está vacío |
+
+Ejemplo de cuerpo: {"motivo": "El laboratorio está en mantenimiento esa semana"}
 
 ## Usuarios de prueba
 
@@ -255,7 +320,7 @@ Clave de todos: Reservas2026*
 | espacio | Laboratorios y salas: tipo, capacidad, ubicación y si están activos |
 | espacio_aprobador | Qué aprobadores gestionan cada espacio |
 | solicitud | Solicitudes de reserva y su estado (PENDIENTE, APROBADA, RECHAZADA, CANCELADA) |
-| reserva | Reservas generadas al aprobar. La BD impide dos reservas activas cruzadas en el mismo espacio |
+| reserva | Reservas generadas al aprobar. Una por solicitud. La BD impide dos reservas activas cruzadas en el mismo espacio |
 | trazabilidad | Historial de acciones sobre cada solicitud. No se puede modificar ni borrar |
 
 Datos de prueba:
