@@ -40,6 +40,7 @@ Cada paso queda en el historial: CREADA, APROBADA, RECHAZADA.
 | 3 | HU-04 y HU-05 (SCRUM-73, SCRUM-75): crear solicitud, validar disponibilidad y mis solicitudes. Registro CREADA en el historial | POST /api/v1/solicitudes/, GET /api/v1/solicitudes/mias, GET /api/v1/espacios/{espacio_id}/disponibilidad |
 | 4 | HU-08 y HU-09 (SCRUM-77, SCRUM-79): pendientes del aprobador y detalle de una solicitud | GET /api/v1/solicitudes/pendientes, GET /api/v1/solicitudes/{solicitud_id} |
 | 5 | HU-10, HU-13 y HU-11 (SCRUM-81, SCRUM-85, SCRUM-83): aprobar con reserva automática y rechazar con motivo. Registros APROBADA y RECHAZADA en el historial | POST /api/v1/solicitudes/{solicitud_id}/aprobar, POST /api/v1/solicitudes/{solicitud_id}/rechazar |
+| 6 | HU-14 (SCRUM-86): reservas activas del usuario y detalle de una reserva | GET /api/v1/reservas/mias, GET /api/v1/reservas/{reserva_id} |
 
 ## Índice de endpoints
 
@@ -56,6 +57,8 @@ Cada paso queda en el historial: CREADA, APROBADA, RECHAZADA.
 | GET | /api/v1/solicitudes/{solicitud_id} | Detalle de una solicitud | APROBADOR (sus espacios), SOLICITANTE (las suyas), ADMIN (todas) | HU-09 | 4 |
 | POST | /api/v1/solicitudes/{solicitud_id}/aprobar | Aprobar y generar la reserva | APROBADOR (sus espacios) | HU-10, HU-13 | 5 |
 | POST | /api/v1/solicitudes/{solicitud_id}/rechazar | Rechazar con motivo | APROBADOR (sus espacios) | HU-11 | 5 |
+| GET | /api/v1/reservas/mias | Mis reservas activas | SOLICITANTE | HU-14 | 6 |
+| GET | /api/v1/reservas/{reserva_id} | Detalle de una reserva | SOLICITANTE (las suyas), APROBADOR (sus espacios), ADMIN (todas) | HU-14 | 6 |
 
 ## Autenticación
 
@@ -298,6 +301,43 @@ historial la acción RECHAZADA con el motivo.
 | 422 | Falta el motivo o está vacío |
 
 Ejemplo de cuerpo: {"motivo": "El laboratorio está en mantenimiento esa semana"}
+
+## Reservas
+
+### GET /api/v1/reservas/mias
+
+HU-14. Reservas ACTIVAS del usuario que inició sesión que todavía no han terminado,
+ordenadas por fecha y hora de inicio. Solo rol SOLICITANTE. Solo se ven las propias.
+
+No aparecen:
+- Las reservas canceladas (criterio 5).
+- Las que ya terminaron (su hora de fin ya pasó).
+
+Cada elemento trae: id, estado, espacio (id, nombre, tipo, capacidad, ubicacion),
+inicio, fin y solicitud_id.
+
+| Código | Cuándo |
+|---|---|
+| 200 | Lista de reservas activas (puede ser vacía) |
+| 401 | No autenticado |
+| 403 | El usuario no es SOLICITANTE |
+
+### GET /api/v1/reservas/{reserva_id}
+
+HU-14, criterio 3. Detalle de una reserva: todo lo de la lista más finalizada,
+titular (nombre), proposito, asistentes, equipamiento, aprobada_por (nombre),
+fecha_aprobacion y creada_en. También muestra reservas canceladas o finalizadas.
+
+finalizada = true: la hora de fin ya pasó.
+
+Quién puede verla: SOLICITANTE (las suyas), APROBADOR (las de sus espacios), ADMIN (todas).
+
+| Código | Cuándo |
+|---|---|
+| 200 | Detalle de la reserva |
+| 401 | No autenticado |
+| 404 | La reserva no existe o el usuario no tiene acceso (mismo mensaje en ambos casos) |
+| 422 | El id no es un número |
 
 ## Usuarios de prueba
 

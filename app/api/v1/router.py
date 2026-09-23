@@ -15,3 +15,5 @@ from app.api.v1.endpoints import revision
 api_router.include_router(revision.router, prefix="/solicitudes", tags=["solicitudes"])
 from app.api.v1.endpoints import decision
 api_router.include_router(decision.router, prefix="/solicitudes", tags=["solicitudes"])
+from app.api.v1.endpoints import reservas
+api_router.include_router(reservas.router, prefix="/reservas", tags=["reservas"])
