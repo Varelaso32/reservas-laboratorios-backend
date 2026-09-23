@@ -20,7 +20,7 @@ Este archivo se actualiza al terminar cada fase.
 |---|---|
 | 401 | Falta el token, no es válido o expiró |
 | 403 | El usuario no tiene el rol necesario o está inactivo |
-| 404 | El recurso no existe o no está activo |
+| 404 | El recurso no existe, no está activo o el usuario no tiene acceso a él |
 | 409 | Conflicto: el espacio está ocupado o ya existe una solicitud pendiente que se cruza |
 | 422 | Datos de entrada inválidos |
 
@@ -32,6 +32,7 @@ Este archivo se actualiza al terminar cada fase.
 | 1 | HU-01: listar espacios y consultar disponibilidad | GET /api/v1/espacios/, GET /api/v1/espacios/disponibles |
 | 2 | Login y roles con JWT | POST /api/v1/auth/login, GET /api/v1/auth/me |
 | 3 | HU-04 y HU-05 (SCRUM-73, SCRUM-75): crear solicitud, validar disponibilidad y mis solicitudes. Registro CREADA en el historial | POST /api/v1/solicitudes/, GET /api/v1/solicitudes/mias, GET /api/v1/espacios/{espacio_id}/disponibilidad |
+| 4 | HU-08 y HU-09 (SCRUM-77, SCRUM-79): pendientes del aprobador y detalle de una solicitud | GET /api/v1/solicitudes/pendientes, GET /api/v1/solicitudes/{solicitud_id} |
 
 ## Índice de endpoints
 
@@ -44,6 +45,8 @@ Este archivo se actualiza al terminar cada fase.
 | GET | /api/v1/auth/me | Usuario actual | Cualquiera con sesión | Base | 2 |
 | POST | /api/v1/solicitudes/ | Crear solicitud de reserva | SOLICITANTE | HU-04, HU-05 | 3 |
 | GET | /api/v1/solicitudes/mias | Mis solicitudes | SOLICITANTE | HU-10.6, HU-11.7 | 3 |
+| GET | /api/v1/solicitudes/pendientes | Pendientes de mis espacios | APROBADOR | HU-08 | 4 |
+| GET | /api/v1/solicitudes/{solicitud_id} | Detalle de una solicitud | APROBADOR (sus espacios), SOLICITANTE (las suyas), ADMIN (todas) | HU-09 | 4 |
 
 ## Autenticación
 
@@ -192,6 +195,44 @@ aprobada y el motivo si fue rechazada.
 | 200 | Lista de solicitudes (puede ser vacía) |
 | 401 | No autenticado |
 | 403 | El usuario no es SOLICITANTE |
+
+### GET /api/v1/solicitudes/pendientes
+
+HU-08. Solicitudes en estado PENDIENTE de los espacios que administra el aprobador
+que inició sesión. Solo rol APROBADOR. No muestra solicitudes de otros espacios.
+
+| Parámetro | Tipo | Requerido | Descripción |
+|---|---|---|---|
+| espacio_id | entero | No | Filtra por un espacio. Si es un espacio que no administra, devuelve [] |
+
+Cada elemento trae: id, estado, solicitante (id, nombre, email, cargo), espacio
+(id, nombre, tipo, capacidad, ubicacion), inicio, fin, asistentes, creada_en y
+vencida. Orden: por hora de inicio, las más próximas primero.
+
+vencida = true significa que la hora de inicio ya pasó: la solicitud ya no se puede aprobar.
+
+| Código | Cuándo |
+|---|---|
+| 200 | Lista de pendientes (puede ser vacía) |
+| 401 | No autenticado |
+| 403 | El usuario no es APROBADOR |
+
+### GET /api/v1/solicitudes/{solicitud_id}
+
+HU-09. Detalle completo de una solicitud: todo lo de la lista de pendientes más
+proposito, equipamiento, motivo_rechazo, decidido_por (nombre) y fecha_decision.
+
+Quién puede verla:
+- APROBADOR: solo solicitudes de los espacios que administra.
+- SOLICITANTE: solo las suyas.
+- ADMIN: todas.
+
+| Código | Cuándo |
+|---|---|
+| 200 | Detalle de la solicitud |
+| 401 | No autenticado |
+| 404 | La solicitud no existe o el usuario no tiene acceso (mismo mensaje en ambos casos) |
+| 422 | El id no es un número |
 
 ## Usuarios de prueba
 

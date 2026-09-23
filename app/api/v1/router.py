@@ -11,3 +11,5 @@ api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 from app.api.v1.endpoints import solicitudes, disponibilidad_espacio
 api_router.include_router(solicitudes.router, prefix="/solicitudes", tags=["solicitudes"])
 api_router.include_router(disponibilidad_espacio.router, prefix="/espacios", tags=["espacios"])
+from app.api.v1.endpoints import revision
+api_router.include_router(revision.router, prefix="/solicitudes", tags=["solicitudes"])
