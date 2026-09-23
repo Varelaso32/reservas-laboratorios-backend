@@ -1,6 +1,7 @@
 # Reservas Laboratorios API: documentación de endpoints
 
 Swagger: http://localhost:8000/docs
+Esquema OpenAPI: http://localhost:8000/api/v1/openapi.json
 
 Este archivo se actualiza al terminar cada fase.
 
@@ -9,7 +10,16 @@ Este archivo se actualiza al terminar cada fase.
 - Rutas de negocio bajo /api/v1.
 - Fechas y horas en hora de Colombia (-05:00).
 - Errores con la forma {"detail": "mensaje"}.
-- Por ahora los endpoints no piden login. Se protegen en la fase de autenticación.
+- Autenticación: token JWT en la cabecera Authorization: Bearer <token>.
+  Se obtiene con POST /api/v1/auth/login y dura 60 minutos.
+- En Swagger: botón "Authorize", correo en username y clave en password.
+- Los endpoints de espacios (fase 1) siguen siendo públicos por ahora.
+
+| Código | Significado |
+|---|---|
+| 401 | Falta el token, no es válido o expiró |
+| 403 | El usuario no tiene el rol necesario o está inactivo |
+| 422 | Datos de entrada inválidos |
 
 ## Cambios por fase
 
@@ -17,13 +27,57 @@ Este archivo se actualiza al terminar cada fase.
 |---|---|---|
 | 0 | Base de datos: conexión, 6 tablas y datos de prueba | Ninguno |
 | 1 | HU-01: listar espacios y consultar disponibilidad | GET /api/v1/espacios/, GET /api/v1/espacios/disponibles |
+| 2 | Login y roles con JWT | POST /api/v1/auth/login, GET /api/v1/auth/me |
 
 ## Índice de endpoints
 
-| Método | Ruta | Resumen | HU | Fase |
-|---|---|---|---|---|
-| GET | /api/v1/espacios/ | Listar espacios activos | HU-01 | 1 |
-| GET | /api/v1/espacios/disponibles | Consultar espacios disponibles | HU-01 | 1 |
+| Método | Ruta | Resumen | Requiere login | HU | Fase |
+|---|---|---|---|---|---|
+| GET | /api/v1/espacios/ | Listar espacios activos | No | HU-01 | 1 |
+| GET | /api/v1/espacios/disponibles | Consultar espacios disponibles | No | HU-01 | 1 |
+| POST | /api/v1/auth/login | Iniciar sesión | No | Base | 2 |
+| GET | /api/v1/auth/me | Usuario actual | Sí | Base | 2 |
+
+## Autenticación
+
+### POST /api/v1/auth/login
+
+Inicia sesión y devuelve un token JWT. Se envía como formulario
+(application/x-www-form-urlencoded), no como JSON.
+
+| Campo | Tipo | Requerido | Descripción |
+|---|---|---|---|
+| username | texto | Sí | Correo del usuario (no distingue mayúsculas) |
+| password | texto | Sí | Clave |
+
+Respuesta 200:
+
+| Campo | Descripción |
+|---|---|
+| access_token | Token JWT |
+| token_type | Siempre "bearer" |
+| expira_en | Segundos de vigencia (3600) |
+| usuario | id, nombre, email, rol y cargo |
+
+| Código | Cuándo |
+|---|---|
+| 200 | Sesión iniciada |
+| 401 | Correo o contraseña incorrectos (mismo mensaje en ambos casos) |
+| 403 | El usuario está inactivo |
+| 422 | Falta el correo o la clave, o se envió como JSON |
+
+Ejemplo: curl -X POST "http://localhost:8000/api/v1/auth/login" -d "username=estudiante@reservas.test&password=Reservas2026*"
+
+### GET /api/v1/auth/me
+
+Devuelve los datos del usuario dueño del token: id, nombre, email, rol y cargo.
+
+| Código | Cuándo |
+|---|---|
+| 200 | Token válido |
+| 401 | Falta el token, no es válido, expiró o el usuario fue desactivado |
+
+Ejemplo: curl "http://localhost:8000/api/v1/auth/me" -H "Authorization: Bearer <token>"
 
 ## Espacios
 
@@ -69,6 +123,19 @@ Reglas:
 
 Ejemplo: curl "http://localhost:8000/api/v1/espacios/disponibles?fecha=2026-10-05&hora_inicio=08:00&hora_fin=10:00"
 
+## Usuarios de prueba
+
+Clave de todos: Reservas2026*
+
+| Correo | Rol | Cargo |
+|---|---|---|
+| admin@reservas.test | ADMIN | Administrador del Sistema |
+| coordinador.labs@reservas.test | APROBADOR | Coordinador de Laboratorios (gestiona los 3 laboratorios) |
+| admin.salas@reservas.test | APROBADOR | Administrador de Sala (gestiona las 3 salas) |
+| estudiante@reservas.test | SOLICITANTE | Estudiante |
+| docente@reservas.test | SOLICITANTE | Docente |
+| administrativo@reservas.test | SOLICITANTE | Administrativo |
+
 ## Base de datos (referencia)
 
 | Tabla | Qué guarda |
@@ -80,6 +147,10 @@ Ejemplo: curl "http://localhost:8000/api/v1/espacios/disponibles?fecha=2026-10-0
 | reserva | Reservas generadas al aprobar. La BD impide dos reservas activas cruzadas en el mismo espacio |
 | trazabilidad | Historial de acciones sobre cada solicitud. No se puede modificar ni borrar |
 
-Datos de prueba (docker compose exec api python -m app.utils.datos_prueba):
-6 usuarios con dominio @reservas.test, 6 espacios (uno inactivo) y una reserva
-activa al día siguiente de 08:00 a 10:00 en el Laboratorio de Redes.
+Datos de prueba:
+- docker compose exec api python -m app.utils.datos_prueba (usuarios, espacios y una reserva de ejemplo)
+- docker compose exec api python -m app.utils.claves_prueba (asigna la clave de prueba)
+
+Configuración para producción (variables de entorno del contenedor, NO del .env):
+- JWT_SECRET: clave para firmar los tokens. Obligatoria en producción.
+- JWT_EXPIRA_MINUTOS: vigencia del token (por defecto 60).

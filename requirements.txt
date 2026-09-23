@@ -4,3 +4,6 @@ pydantic>=2.7.0
 pydantic-settings>=2.3.0
 sqlalchemy==2.0.54
 psycopg[binary]==3.3.6
+pyjwt==2.14.0
+pwdlib[argon2]==0.3.1
+python-multipart==0.0.32
