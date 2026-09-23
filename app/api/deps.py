@@ -16,7 +16,9 @@ from app.models.enums import Rol
 from app.models.modelos import Usuario
 
 # tokenUrl habilita el botón "Authorize" de Swagger
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
+# auto_error=False: sin token FastAPI respondería "Not authenticated" en inglés;
+# así el mensaje es siempre el nuestro, en español.
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False)
 
 _NO_AUTENTICADO = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -26,8 +28,10 @@ _NO_AUTENTICADO = HTTPException(
 
 
 def get_usuario_actual(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+    token: str | None = Depends(oauth2_scheme), db: Session = Depends(get_db)
 ) -> Usuario:
+    if not token:
+        raise _NO_AUTENTICADO
     try:
         datos = leer_token(token)
         usuario_id = int(datos["sub"])
