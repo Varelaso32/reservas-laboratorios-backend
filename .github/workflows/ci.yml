@@ -38,3 +38,29 @@ jobs:
       - name: Ejecutar Linter (Flake8)
         # Detiene el flujo si hay errores críticos de sintaxis o variables no definidas
         run: flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics    
+
+# ============================================================================
+  # 2. TEST: Ejecuta las pruebas de los endpoints y lógica de negocio.
+  # ============================================================================
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      - name: Instalar dependencias de la app y Pytest
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest httpx
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Ejecutar Pruebas Unitarias
+        # Busca y ejecuta automáticamente las pruebas en el directorio tests/
+        run: pytest tests/
