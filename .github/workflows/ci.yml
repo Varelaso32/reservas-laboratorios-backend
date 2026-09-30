@@ -1,0 +1,12 @@
+# ==============================================================================
+# Nombre del Flujo: CI Backend
+# Descripcion: Pipeline de Integracion Continua para la API de reservas 
+# de laboratorios. Valida estandares de codigo y pruebas.
+# ==============================================================================
+name: ci Backend
+
+on:
+  push:
+    branches: [ main, develop, qa ]
+  pull_request:
+    branches: [ main, develop, qa ]
