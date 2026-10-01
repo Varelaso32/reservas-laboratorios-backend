@@ -417,3 +417,6 @@ Datos de prueba:
 Configuración para producción (variables de entorno del contenedor, NO del .env):
 - JWT_SECRET: clave para firmar los tokens. Obligatoria en producción.
 - JWT_EXPIRA_MINUTOS: vigencia del token (por defecto 60).
+- CORS_ORIGINS: orígenes del front que pueden llamar a la API, separados por coma
+  (ej. https://mi-front.vercel.app,http://localhost:5173). Si se define, reemplaza la lista
+  por defecto, que solo trae localhost en los puertos 5173 (Vite), 3000 (React/Next) y 4200 (Angular).
