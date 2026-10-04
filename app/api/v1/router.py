@@ -19,3 +19,7 @@ from app.api.v1.endpoints import reservas
 api_router.include_router(reservas.router, prefix="/reservas", tags=["reservas"])
 from app.api.v1.endpoints import historial
 api_router.include_router(historial.router, tags=["historial"])
+from app.api.v1.endpoints import usuarios
+api_router.include_router(usuarios.router, prefix="/usuarios", tags=["Usuarios"])
+from app.api.v1.endpoints import registro
+api_router.include_router(registro.router, prefix="/auth", tags=["auth"])
