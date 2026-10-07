@@ -31,7 +31,9 @@ _ERRORES = {
         "- Que la solicitud esté PENDIENTE (si ya se decidió, 409).\n"
         "- Que no esté vencida (si su hora de inicio ya pasó, 409; solo se puede rechazar).\n"
         "- Que el espacio siga activo y libre en ese horario (si otra solicitud ya se aprobó "
-        "para ese horario, 409).\n\n"
+        "para ese horario, 409).\n"
+        "- Que los asistentes no superen la capacidad actual del espacio (si la capacidad "
+        "cambió después de crear la solicitud, 409).\n\n"
         "Queda registrado quién aprobó y cuándo, y la acción APROBADA en el historial. "
         "Una solicitud nunca genera más de una reserva."
     ),

@@ -164,6 +164,12 @@ class UsuarioDetalleOut(BaseModel):
         return valor.astimezone(ZONA_COLOMBIA) if valor.tzinfo else valor
 
 
+class UsuarioListaItemOut(UsuarioDetalleOut):
+    reservas_mes: int = Field(
+        description="Cantidad de reservas ACTIVAS que comienzan en el mes actual, hora de Colombia"
+    )
+
+
 class UsuarioListaOut(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
@@ -171,7 +177,12 @@ class UsuarioListaOut(BaseModel):
                 "total": 1,
                 "skip": 0,
                 "limit": 20,
-                "items": [UsuarioDetalleOut.model_config["json_schema_extra"]["example"]],
+                "items": [
+                    {
+                        **UsuarioDetalleOut.model_config["json_schema_extra"]["example"],
+                        "reservas_mes": 3,
+                    }
+                ],
             }
         }
     )
@@ -179,4 +190,4 @@ class UsuarioListaOut(BaseModel):
     total: int = Field(description="Usuarios que cumplen el filtro, sin contar la paginación")
     skip: int = Field(description="Registros saltados")
     limit: int = Field(description="Máximo de registros devueltos")
-    items: list[UsuarioDetalleOut] = Field(description="Usuarios de esta página, ordenados por id")
+    items: list[UsuarioListaItemOut] = Field(description="Usuarios de esta página, ordenados por id")

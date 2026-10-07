@@ -63,7 +63,9 @@ def crear_usuario(
     description=(
         "Devuelve los usuarios ordenados por id, con paginación. Solo para ADMIN. "
         "Se puede filtrar por rol y por estado (activo). `total` cuenta todos los que cumplen "
-        "el filtro, no solo los de la página."
+        "el filtro, no solo los de la página. Cada usuario incluye `reservas_mes`: cantidad "
+        "de reservas ACTIVAS cuyo inicio cae en el mes actual, según la hora de Colombia. "
+        "Las canceladas no cuentan."
     ),
     response_description="Página de usuarios",
     responses={**_401, **_403, 422: {"description": "skip negativo o limit fuera de 1 a 100"}},

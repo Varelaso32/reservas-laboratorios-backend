@@ -1,14 +1,16 @@
 """Gestión de usuarios: crear, registrarse, listar, consultar, actualizar y activar/desactivar."""
 import os
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_clave
-from app.models.enums import Cargo, Rol
-from app.models.modelos import Usuario
+from app.models.enums import Cargo, EstadoReserva, Rol
+from app.models.modelos import Reserva, Usuario
 from app.schemas.usuario import RegistroCrear, UsuarioActualizar, UsuarioCrear
+from app.utils.fechas import ZONA_COLOMBIA
 
 # Cargos válidos para cada rol (los mismos que usan los datos de prueba)
 CARGOS_POR_ROL = {
@@ -131,7 +133,47 @@ def listar(db: Session, skip: int, limit: int, rol: Rol | None, activo: bool | N
         filtros.append(Usuario.activo.is_(activo))
 
     total = db.scalar(select(func.count()).select_from(Usuario).where(*filtros))
-    items = db.scalars(select(Usuario).where(*filtros).order_by(Usuario.id).offset(skip).limit(limit)).all()
+    ahora = datetime.now(ZONA_COLOMBIA)
+    inicio_mes = datetime(ahora.year, ahora.month, 1, tzinfo=ZONA_COLOMBIA)
+    if ahora.month == 12:
+        fin_mes = datetime(ahora.year + 1, 1, 1, tzinfo=ZONA_COLOMBIA)
+    else:
+        fin_mes = datetime(ahora.year, ahora.month + 1, 1, tzinfo=ZONA_COLOMBIA)
+
+    reservas_mes = (
+        select(
+            Reserva.usuario_id.label("usuario_id"),
+            func.count(Reserva.id).label("reservas_mes"),
+        )
+        .where(
+            Reserva.estado == EstadoReserva.ACTIVA,
+            Reserva.inicio >= inicio_mes,
+            Reserva.inicio < fin_mes,
+        )
+        .group_by(Reserva.usuario_id)
+        .subquery()
+    )
+    filas = db.execute(
+        select(Usuario, func.coalesce(reservas_mes.c.reservas_mes, 0))
+        .outerjoin(reservas_mes, reservas_mes.c.usuario_id == Usuario.id)
+        .where(*filtros)
+        .order_by(Usuario.id)
+        .offset(skip)
+        .limit(limit)
+    ).all()
+    items = [
+        {
+            "id": usuario.id,
+            "nombre": usuario.nombre,
+            "email": usuario.email,
+            "rol": usuario.rol,
+            "cargo": usuario.cargo,
+            "activo": usuario.activo,
+            "creado_en": usuario.creado_en,
+            "reservas_mes": reservas,
+        }
+        for usuario, reservas in filas
+    ]
     return {"total": total, "skip": skip, "limit": limit, "items": items}
 
 

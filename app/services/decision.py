@@ -43,9 +43,16 @@ def aprobar(db: Session, aprobador: Usuario, solicitud_id: int) -> dict:
     if solicitud.inicio < ahora:
         raise ErrorDecision(409, "La solicitud está vencida: su hora de inicio ya pasó. Solo se puede rechazar")
 
-    espacio = db.get(Espacio, solicitud.espacio_id)
+    espacio = db.scalar(
+        select(Espacio).where(Espacio.id == solicitud.espacio_id).with_for_update()
+    )
     if not espacio.activo:
         raise ErrorDecision(409, "El espacio ya no está activo. Solo se puede rechazar")
+    if solicitud.asistentes > espacio.capacidad:
+        raise ErrorDecision(
+            409,
+            "La cantidad de asistentes supera la capacidad actual del espacio. La solicitud no se puede aprobar",
+        )
 
     # Se revalida: otra solicitud del mismo horario pudo aprobarse después de creada esta
     if not disponibilidad.esta_disponible(db, solicitud.espacio_id, solicitud.inicio, solicitud.fin):

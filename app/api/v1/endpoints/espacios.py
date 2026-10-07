@@ -4,12 +4,125 @@ from datetime import date, time
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.api.deps import requiere_rol
 from app.core.database import get_db
-from app.models.enums import TipoEspacio
-from app.schemas.espacio import EspacioOut
-from app.services import disponibilidad
+from app.models.enums import Rol, TipoEspacio
+from app.models.modelos import Usuario
+from app.schemas.espacio import (
+    EspacioActualizar,
+    EspacioAdminOut,
+    EspacioEstadoActualizar,
+    EspacioMetricaOut,
+    EspacioOut,
+)
+from app.services import disponibilidad, metricas_espacios
+from app.services import espacios as gestion_espacios
 
 router = APIRouter()
+
+
+def _ejecutar(db: Session, accion, *args):
+    try:
+        return accion(db, *args)
+    except gestion_espacios.ErrorEspacio as error:
+        db.rollback()
+        raise HTTPException(status_code=error.codigo, detail=error.mensaje)
+
+
+@router.get(
+    "/admin",
+    response_model=list[EspacioAdminOut],
+    summary="Listar todos los espacios para administración",
+    description="Devuelve espacios activos e inactivos. Solo para usuarios ADMIN.",
+    response_description="Todos los espacios, ordenados por tipo y nombre",
+    responses={
+        401: {"description": "No autenticado"},
+        403: {"description": "Solo para usuarios ADMIN"},
+    },
+)
+def listar_espacios_admin(
+    _admin: Usuario = Depends(requiere_rol(Rol.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    return gestion_espacios.listar_admin(db)
+
+
+@router.patch(
+    "/{espacio_id}",
+    response_model=EspacioAdminOut,
+    summary="Actualizar un espacio",
+    description=(
+        "Actualiza parcialmente nombre, tipo, capacidad o ubicación. Solo para ADMIN. "
+        "No se permite reducir la capacidad por debajo de los asistentes de una reserva futura "
+        "ACTIVA. Los campos omitidos no cambian; `ubicacion: null` la quita."
+    ),
+    response_description="Espacio actualizado",
+    responses={
+        401: {"description": "No autenticado"},
+        403: {"description": "Solo para usuarios ADMIN"},
+        404: {"description": "El espacio no existe"},
+        409: {"description": "Nombre duplicado o capacidad incompatible con una reserva futura"},
+        422: {"description": "Datos inválidos"},
+    },
+)
+def actualizar_espacio(
+    espacio_id: int,
+    datos: EspacioActualizar,
+    _admin: Usuario = Depends(requiere_rol(Rol.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    return _ejecutar(db, gestion_espacios.actualizar, espacio_id, datos)
+
+
+@router.patch(
+    "/{espacio_id}/estado",
+    response_model=EspacioAdminOut,
+    summary="Activar o desactivar un espacio",
+    description=(
+        "Cambia el campo `activo`. Al desactivar se conservan las reservas futuras ya aprobadas, "
+        "pero no se permiten nuevas solicitudes ni aprobaciones. No elimina el espacio ni su historial. "
+        "Solo para ADMIN."
+    ),
+    response_description="Espacio con su nuevo estado",
+    responses={
+        401: {"description": "No autenticado"},
+        403: {"description": "Solo para usuarios ADMIN"},
+        404: {"description": "El espacio no existe"},
+        422: {"description": "Falta el campo activo o es inválido"},
+    },
+)
+def cambiar_estado_espacio(
+    espacio_id: int,
+    datos: EspacioEstadoActualizar,
+    _admin: Usuario = Depends(requiere_rol(Rol.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    return _ejecutar(db, gestion_espacios.cambiar_estado, espacio_id, datos.activo)
+
+
+@router.get(
+    "/metricas",
+    response_model=list[EspacioMetricaOut],
+    summary="Métricas de reservas por espacio",
+    description=(
+        "Devuelve en una sola consulta las métricas de todos los espacios para la fecha indicada. "
+        "Solo para ADMIN. Cuenta reservas ACTIVAS que se cruzan con la fecha; las canceladas no "
+        "cuentan. Los minutos reservados se limitan al horario institucional de lunes a sábado "
+        "07:00–22:00. Los espacios inactivos tienen 0 minutos disponibles y porcentaje null. "
+        "Los domingos también tienen 0 minutos disponibles y porcentaje null."
+    ),
+    response_description="Métricas por espacio para la fecha consultada",
+    responses={
+        401: {"description": "No autenticado"},
+        403: {"description": "Solo para usuarios ADMIN"},
+    },
+)
+def metricas_por_espacio(
+    fecha: date = Query(..., description="Fecha a consultar (AAAA-MM-DD)", examples=["2026-10-06"]),
+    _admin: Usuario = Depends(requiere_rol(Rol.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    return metricas_espacios.listar_por_fecha(db, fecha)
 
 
 @router.get(

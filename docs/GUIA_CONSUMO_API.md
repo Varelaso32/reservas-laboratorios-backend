@@ -241,15 +241,21 @@ Resumen:
 | POST | `/auth/login` | Público | 7.2 |
 | GET | `/auth/me` | Cualquiera con sesión | 7.3 |
 | GET | `/espacios/` | Público | 7.4 |
+| GET | `/espacios/admin` | ADMIN | 7.4A |
+| PATCH | `/espacios/{espacio_id}` | ADMIN | 7.4B |
+| PATCH | `/espacios/{espacio_id}/estado` | ADMIN | 7.4C |
 | GET | `/espacios/disponibles` | Público | 7.5 |
 | GET | `/espacios/{espacio_id}/disponibilidad` | Público | 7.6 |
+| GET | `/espacios/metricas` | ADMIN | 7.6A |
 | POST | `/solicitudes/` | SOLICITANTE | 7.7 |
 | GET | `/solicitudes/mias` | SOLICITANTE | 7.8 |
 | GET | `/solicitudes/pendientes` | APROBADOR | 7.9 |
+| GET | `/solicitudes/resueltas` | APROBADOR | 7.9A |
 | GET | `/solicitudes/{solicitud_id}` | Según el rol | 7.10 |
 | POST | `/solicitudes/{solicitud_id}/aprobar` | APROBADOR | 7.11 |
 | POST | `/solicitudes/{solicitud_id}/rechazar` | APROBADOR | 7.12 |
 | GET | `/reservas/mias` | SOLICITANTE | 7.13 |
+| POST | `/reservas/{reserva_id}/cancelar` | SOLICITANTE | 7.13A |
 | GET | `/reservas/{reserva_id}` | Según el rol | 7.14 |
 | GET | `/solicitudes/{solicitud_id}/historial` | Según el rol | 7.15 |
 | GET | `/reservas/{reserva_id}/historial` | Según el rol | 7.16 |
@@ -393,6 +399,62 @@ Respuesta 200:
 
 ---
 
+### 7.4A GET /espacios/admin — Listar espacios para administración
+
+Rol **ADMIN**. Devuelve espacios activos e inactivos, ordenados por tipo y nombre.
+
+```js
+const espaciosAdmin = await api("GET", "/espacios/admin");
+```
+
+Cada espacio incluye `id`, `nombre`, `tipo`, `capacidad`, `ubicacion` y `activo`.
+
+| Código | Cuándo |
+|---|---|
+| 401 | Sin token |
+| 403 | El usuario no es ADMIN |
+
+---
+
+### 7.4B PATCH /espacios/{espacio_id} — Editar un espacio
+
+Rol **ADMIN**. Actualiza solo los campos enviados: `nombre`, `tipo`, `capacidad` y `ubicacion`.
+Se permite enviar `ubicacion: null` para quitarla. El cuerpo no puede estar vacío.
+
+```json
+{"nombre": "Laboratorio de Redes", "capacidad": 28, "ubicacion": "Bloque B, piso 2"}
+```
+
+No se puede reducir la capacidad por debajo de los asistentes de una reserva futura ACTIVA
+(409). Las solicitudes PENDIENTES permanecen, pero no podrán aprobarse si exceden la capacidad
+nueva.
+
+| Código | Cuándo |
+|---|---|
+| 401 | Sin token |
+| 403 | El usuario no es ADMIN |
+| 404 | El espacio no existe |
+| 409 | Nombre duplicado o capacidad menor a la de una reserva futura |
+| 422 | Campos inválidos o cuerpo vacío |
+
+---
+
+### 7.4C PATCH /espacios/{espacio_id}/estado — Activar o desactivar
+
+Rol **ADMIN**. Cuerpo: `{"activo": false}` para desactivar o `{"activo": true}` para reactivar.
+La desactivación conserva las reservas futuras aprobadas y el historial, pero bloquea nuevas
+solicitudes y aprobaciones. No se borra físicamente el espacio porque hay referencias desde
+solicitudes y reservas.
+
+| Código | Cuándo |
+|---|---|
+| 401 | Sin token |
+| 403 | El usuario no es ADMIN |
+| 404 | El espacio no existe |
+| 422 | Falta `activo` o tiene un valor inválido |
+
+---
+
 ### 7.5 GET /espacios/disponibles — Espacios libres en un horario
 
 Público. Devuelve los espacios activos que **no** tienen una reserva activa que se
@@ -464,6 +526,58 @@ Respuesta 200 (siempre 200, esté libre o no):
 |---|---|
 | 404 | El espacio no existe o no está activo |
 | 422 | Horario inválido o en el pasado |
+
+---
+
+### 7.6A GET /espacios/metricas — Métricas de ocupación por espacio
+
+Rol **ADMIN**. Devuelve las métricas de todos los espacios (activos e inactivos) para la fecha
+consultada, evitando una petición por cada espacio.
+
+| Parámetro (query) | Requerido | Formato |
+|---|---|---|
+| `fecha` | Sí | `AAAA-MM-DD` |
+
+Las reservas CANCELADAS no cuentan. `reservas_dia` cuenta las reservas ACTIVAS que se cruzan
+con la fecha. `minutos_reservados` cuenta solo el tiempo dentro del horario institucional,
+lunes a sábado de 07:00 a 22:00 (hora de Colombia). En esos días, un espacio activo tiene
+900 minutos disponibles. En domingo o para espacios inactivos, los minutos disponibles son 0
+y `porcentaje_ocupacion` es `null`.
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/api/v1/espacios/metricas?fecha=2026-10-06"
+```
+
+```js
+const metricas = await api("GET", "/espacios/metricas?fecha=2026-10-06");
+```
+
+Respuesta 200:
+
+```json
+[
+  {
+    "id": 1,
+    "nombre": "Laboratorio de Redes",
+    "tipo": "LABORATORIO",
+    "capacidad": 25,
+    "ubicacion": "Bloque A, piso 2",
+    "activo": true,
+    "fecha": "2026-10-06",
+    "reservas_dia": 2,
+    "minutos_reservados": 90,
+    "minutos_disponibles": 900,
+    "porcentaje_ocupacion": 10
+  }
+]
+```
+
+| Código | Cuándo |
+|---|---|
+| 401 | Falta el token, no es válido o expiró |
+| 403 | El rol no es ADMIN |
+| 422 | La fecha no tiene formato válido |
 
 ---
 
@@ -630,6 +744,59 @@ aprobar, solo rechazar. Conviene deshabilitar el botón "Aprobar" en ese caso.
 
 ---
 
+### 7.9A GET /solicitudes/resueltas — Historial de solicitudes por espacio
+
+Rol **APROBADOR**. Devuelve las solicitudes APROBADAS y RECHAZADAS de un espacio que administra,
+ordenadas por fecha de resolución descendente. Un espacio no asignado devuelve `[]`. ADMIN no
+puede consultar esta bandeja (403).
+
+| Parámetro (query) | Requerido | Descripción |
+|---|---|---|
+| `espacio_id` | Sí | Identificador positivo del espacio |
+| `estado` | No | `APROBADA` o `RECHAZADA` |
+| `fecha_desde` | No | Fecha inicial de resolución, inclusiva (`AAAA-MM-DD`) |
+| `fecha_hasta` | No | Fecha final de resolución, inclusiva (`AAAA-MM-DD`) |
+
+El rango de fechas se interpreta en hora de Colombia. Las solicitudes PENDIENTES y CANCELADAS
+no aparecen.
+
+```bash
+curl "http://localhost:8000/api/v1/solicitudes/resueltas?espacio_id=1&estado=RECHAZADA" \
+  -H "Authorization: ******"
+```
+
+```js
+const params = new URLSearchParams({ espacio_id: "1", estado: "RECHAZADA" });
+const historial = await api("GET", `/solicitudes/resueltas?${params}`);
+```
+
+Respuesta 200:
+
+```json
+[
+  {
+    "id": 8,
+    "estado": "RECHAZADA",
+    "solicitante": {"id": 4, "nombre": "Estudiante de Prueba", "email": "estudiante@reservas.test", "cargo": "ESTUDIANTE"},
+    "espacio": {"id": 1, "nombre": "Laboratorio de Redes", "tipo": "LABORATORIO", "capacidad": 25, "ubicacion": "Bloque A, piso 2"},
+    "inicio": "2026-10-08T10:00:00-05:00",
+    "fin": "2026-10-08T12:00:00-05:00",
+    "asistentes": 15,
+    "decidida_por": "Coordinador de Laboratorios",
+    "fecha_decision": "2026-10-06T09:15:00-05:00",
+    "motivo_rechazo": "No hay disponibilidad"
+  }
+]
+```
+
+| Código | Cuándo |
+|---|---|
+| 401 | Sin token |
+| 403 | El usuario no es APROBADOR |
+| 422 | Filtro inválido o `fecha_desde` posterior a `fecha_hasta` |
+
+---
+
 ### 7.10 GET /solicitudes/{solicitud_id} — Detalle de una solicitud
 
 Cualquier rol, según el acceso (ver la sección 7). Devuelve lo mismo que la bandeja,
@@ -704,6 +871,7 @@ Respuesta 200:
 | 409 | La solicitud ya no está pendiente (estado actual: APROBADA) |
 | 409 | La solicitud está vencida: su hora de inicio ya pasó. Solo se puede rechazar |
 | 409 | El espacio ya no está activo. Solo se puede rechazar |
+| 409 | Los asistentes superan la capacidad actual del espacio |
 | 409 | El espacio ya fue reservado en ese horario por otra solicitud aprobada |
 
 Si llegan dos aprobaciones al mismo tiempo (dos aprobadores, o un doble clic), solo
@@ -781,6 +949,44 @@ Respuesta 200:
 |---|---|
 | 401 | Sin token |
 | 403 | El usuario no es SOLICITANTE |
+
+---
+
+### 7.13A POST /reservas/{reserva_id}/cancelar — Cancelar una reserva
+
+Rol **SOLICITANTE**. Solo se pueden cancelar las reservas propias que todavía no hayan
+comenzado. La operación también cambia a CANCELADA la solicitud asociada y registra el
+cambio en el historial. Repetir la petición de una reserva ya cancelada devuelve éxito sin
+duplicar el registro del historial.
+
+```bash
+curl -X POST http://localhost:8000/api/v1/reservas/2/cancelar \
+  -H "Authorization: ******"
+```
+
+```js
+const cancelada = await api("POST", `/reservas/${id}/cancelar`);
+```
+
+Respuesta 200:
+
+```json
+{
+  "id": 2,
+  "estado": "CANCELADA",
+  "espacio": {"id": 2, "nombre": "Laboratorio de Electrónica", "tipo": "LABORATORIO", "capacidad": 20, "ubicacion": "Bloque A, piso 3"},
+  "inicio": "2026-10-05T08:00:00-05:00",
+  "fin": "2026-10-05T10:00:00-05:00",
+  "solicitud_id": 2
+}
+```
+
+| Código | Cuándo |
+|---|---|
+| 401 | Sin token |
+| 403 | El usuario no es SOLICITANTE |
+| 404 | La reserva no existe o no pertenece al usuario |
+| 409 | La reserva ya inició |
 
 ---
 

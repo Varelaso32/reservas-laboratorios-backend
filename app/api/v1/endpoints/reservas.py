@@ -36,6 +36,36 @@ def mis_reservas(
     return reservas.listar_activas(db, usuario)
 
 
+@router.post(
+    "/{reserva_id}/cancelar",
+    response_model=ReservaResumenOut,
+    summary="Cancelar una reserva propia",
+    description=(
+        "Cancela una reserva del usuario SOLICITANTE que todavía no haya iniciado. "
+        "La reserva y su solicitud quedan en estado CANCELADA, y se registra la acción "
+        "en el historial. Si ya estaba cancelada, devuelve su estado actual sin duplicar "
+        "el registro de historial. Las reservas que ya iniciaron no se pueden cancelar."
+    ),
+    response_description="Reserva con estado CANCELADA",
+    responses={
+        401: {"description": "No autenticado"},
+        403: {"description": "Solo para usuarios SOLICITANTE"},
+        404: {"description": "La reserva no existe o no te pertenece"},
+        409: {"description": "La reserva ya inició o su solicitud asociada no existe"},
+    },
+)
+def cancelar_reserva(
+    reserva_id: int,
+    usuario: Usuario = Depends(requiere_rol(Rol.SOLICITANTE)),
+    db: Session = Depends(get_db),
+):
+    try:
+        return reservas.cancelar(db, usuario, reserva_id)
+    except reservas.ErrorReserva as error:
+        db.rollback()
+        raise HTTPException(status_code=error.codigo, detail=error.mensaje)
+
+
 @router.get(
     "/{reserva_id}",
     response_model=ReservaDetalleOut,
