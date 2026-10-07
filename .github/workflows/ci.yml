@@ -61,6 +61,4 @@ jobs:
           pip install pytest httpx
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Ejecutar Pruebas Unitarias
-        # Busca y ejecuta automáticamente las pruebas en el directorio tests/
-        run: pytest tests/
+          pytest tests/ --maxfail=1 --disable-warnings -q
