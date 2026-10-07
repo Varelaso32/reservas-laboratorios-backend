@@ -111,7 +111,34 @@ def test_no_se_puede_consultar_historial_de_espacio_no_asignado(client, solicita
     assert respuesta.json() == []
 
 
-def test_solo_aprobador_puede_consultar_historial_resuelto(client, admin):
-    respuesta = client.get(f"{URL}?espacio_id=1", headers=cabecera(admin))
+def test_admin_consulta_historial_de_cualquier_espacio(client, admin, solicitante, crear_usuario):
+    aprobador = crear_usuario("aprobador-admin-ve@reservas.test", Rol.APROBADOR)
+    espacio_id = _crear_espacio_aprobador(aprobador.id)
+    ids = _crear_historial(espacio_id, aprobador.id, solicitante.id)
+
+    respuesta = client.get(f"{URL}?espacio_id={espacio_id}", headers=cabecera(admin))
+
+    assert respuesta.status_code == 200
+    assert [solicitud["id"] for solicitud in respuesta.json()] == [ids[1], ids[0]]
+
+
+def test_admin_no_puede_aprobar_ni_rechazar(client, admin, solicitante, crear_usuario):
+    aprobador = crear_usuario("aprobador-admin-no@reservas.test", Rol.APROBADOR)
+    espacio_id = _crear_espacio_aprobador(aprobador.id)
+    pendiente = _crear_historial(espacio_id, aprobador.id, solicitante.id)[2]
+
+    aprobar = client.post(f"/api/v1/solicitudes/{pendiente}/aprobar", headers=cabecera(admin))
+    rechazar = client.post(
+        f"/api/v1/solicitudes/{pendiente}/rechazar",
+        json={"motivo": "Prueba"},
+        headers=cabecera(admin),
+    )
+
+    assert aprobar.status_code == 403
+    assert rechazar.status_code == 403
+
+
+def test_solicitante_no_puede_consultar_historial_resuelto(client, solicitante):
+    respuesta = client.get(f"{URL}?espacio_id=1", headers=cabecera(solicitante))
 
     assert respuesta.status_code == 403

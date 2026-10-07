@@ -59,7 +59,7 @@ Cada paso queda en el historial: CREADA, APROBADA, RECHAZADA.
 | POST | /api/v1/solicitudes/ | Crear solicitud de reserva | SOLICITANTE | HU-04, HU-05 | 3 |
 | GET | /api/v1/solicitudes/mias | Mis solicitudes | SOLICITANTE | HU-10.6, HU-11.7 | 3 |
 | GET | /api/v1/solicitudes/pendientes | Pendientes de mis espacios | APROBADOR | HU-08 | 4 |
-| GET | /api/v1/solicitudes/resueltas | Historial de solicitudes por espacio | APROBADOR | — | 4 |
+| GET | /api/v1/solicitudes/resueltas | Historial de solicitudes por espacio | APROBADOR (sus espacios), ADMIN (todos, solo consulta) | — | 4 |
 | GET | /api/v1/solicitudes/{solicitud_id} | Detalle de una solicitud | APROBADOR (sus espacios), SOLICITANTE (las suyas), ADMIN (todas) | HU-09 | 4 |
 | POST | /api/v1/solicitudes/{solicitud_id}/aprobar | Aprobar y generar la reserva | APROBADOR (sus espacios) | HU-10, HU-13 | 5 |
 | POST | /api/v1/solicitudes/{solicitud_id}/rechazar | Rechazar con motivo | APROBADOR (sus espacios) | HU-11 | 5 |
@@ -120,10 +120,10 @@ Devuelve en una sola petición las métricas de todos los espacios, incluidos lo
 Solo para rol ADMIN. Requiere `fecha` en formato `AAAA-MM-DD`.
 
 - Cuenta las reservas ACTIVAS que se cruzan con esa fecha; las CANCELADAS se excluyen.
-- El tiempo reservado se calcula solo dentro del horario institucional: lunes a sábado,
-  07:00–22:00, hora de Colombia.
-- Un espacio activo tiene 900 minutos disponibles en días operativos. Un espacio inactivo
-  o un domingo tiene 0 minutos disponibles y `porcentaje_ocupacion: null`.
+- Se reserva todos los días, solo de 07:00 a 22:00, hora de Colombia (es la misma regla que
+  valida la creación de solicitudes). El tiempo que no se alcance a reservar queda libre.
+- Un espacio activo tiene 900 minutos disponibles por día. Un espacio inactivo tiene
+  0 minutos disponibles y `porcentaje_ocupacion: null`.
 - `porcentaje_ocupacion` es minutos reservados / minutos disponibles * 100.
 
 Respuesta 200:
@@ -230,7 +230,8 @@ Se envía como JSON.
 
 Validaciones, en este orden:
 1. El espacio existe y está activo (si no, 404).
-2. La hora de fin es mayor que la de inicio y el horario no está en el pasado (si no, 422).
+2. La hora de fin es mayor que la de inicio, el horario está entre las 07:00 y las 22:00
+   (cualquier día de la semana) y no está en el pasado (si no, 422).
 3. Los asistentes no superan la capacidad (si no, 422).
 4. El espacio no tiene una reserva activa que se cruce (si la tiene, 409 y no se registra nada).
 5. El mismo usuario no tiene otra solicitud PENDIENTE para ese espacio en un horario que se cruce (si la tiene, 409).
@@ -291,13 +292,14 @@ vencida = true: la hora de inicio ya pasó; solo se puede rechazar.
 
 ### GET /api/v1/solicitudes/resueltas
 
-Lista las solicitudes APROBADAS y RECHAZADAS de un espacio administrado por el APROBADOR,
+Lista las solicitudes APROBADAS y RECHAZADAS de un espacio (el APROBADOR solo los que
+administra; el ADMIN cualquiera, solo para consultar: no puede aprobar ni rechazar),
 con el nombre de quien decidió, la fecha de resolución y el motivo de rechazo. Las CANCELADAS
 y PENDIENTES no aparecen.
 
 | Parámetro | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| espacio_id | entero positivo | Sí | Espacio que administra el aprobador |
+| espacio_id | entero positivo | Sí | Espacio a consultar |
 | estado | APROBADA / RECHAZADA | No | Filtra por estado |
 | fecha_desde | fecha (AAAA-MM-DD) | No | Fecha inicial de resolución, inclusiva |
 | fecha_hasta | fecha (AAAA-MM-DD) | No | Fecha final de resolución, inclusiva |
@@ -309,7 +311,7 @@ la respuesta es `200 []`, igual que la lista de pendientes.
 |---|---|
 | 200 | Lista de solicitudes resueltas (puede ser vacía) |
 | 401 | No autenticado |
-| 403 | El usuario no es APROBADOR (ADMIN también recibe 403) |
+| 403 | El usuario no es APROBADOR ni ADMIN |
 | 422 | Estado, espacio o fecha inválidos; fecha_desde posterior a fecha_hasta |
 
 ### GET /api/v1/solicitudes/{solicitud_id}

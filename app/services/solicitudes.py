@@ -8,7 +8,7 @@ from app.models.enums import AccionTrazabilidad, EstadoSolicitud
 from app.models.modelos import Espacio, Solicitud, Usuario
 from app.schemas.solicitud import SolicitudCrear
 from app.services import disponibilidad, trazabilidad
-from app.utils.fechas import ZONA_COLOMBIA
+from app.utils.fechas import HORA_APERTURA, HORA_CIERRE, ZONA_COLOMBIA
 
 
 class ErrorSolicitud(Exception):
@@ -51,6 +51,11 @@ def crear(db: Session, usuario: Usuario, datos: SolicitudCrear) -> dict:
     fin = datetime.combine(datos.fecha, datos.hora_fin, ZONA_COLOMBIA)
     if fin <= inicio:
         raise ErrorSolicitud(422, "La hora de fin debe ser mayor que la hora de inicio")
+    if datos.hora_inicio < HORA_APERTURA or datos.hora_fin > HORA_CIERRE:
+        raise ErrorSolicitud(
+            422,
+            f"Solo se puede reservar entre las {HORA_APERTURA:%H:%M} y las {HORA_CIERRE:%H:%M}",
+        )
     if inicio < datetime.now(ZONA_COLOMBIA):
         raise ErrorSolicitud(422, "No se puede solicitar un espacio en una fecha u hora pasada")
 

@@ -1,4 +1,4 @@
-"""Métricas de reservas por espacio dentro del horario institucional."""
+"""Métricas de reservas por espacio dentro del horario institucional (todos los días)."""
 from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import select
@@ -6,11 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.models.enums import EstadoReserva
 from app.models.modelos import Espacio, Reserva
-from app.utils.fechas import ZONA_COLOMBIA
+from app.utils.fechas import HORA_APERTURA, HORA_CIERRE, ZONA_COLOMBIA
 
-HORA_APERTURA = time(7)
-HORA_CIERRE = time(22)
-MINUTOS_DIA_OPERATIVO = 15 * 60
+MINUTOS_DIA_OPERATIVO = (HORA_CIERRE.hour - HORA_APERTURA.hour) * 60
 
 
 def listar_por_fecha(db: Session, fecha: date) -> list[dict]:
@@ -31,7 +29,6 @@ def listar_por_fecha(db: Session, fecha: date) -> list[dict]:
 
     horario_apertura = datetime.combine(fecha, HORA_APERTURA, ZONA_COLOMBIA)
     horario_cierre = datetime.combine(fecha, HORA_CIERRE, ZONA_COLOMBIA)
-    dia_habilitado = fecha.weekday() < 6
     acumulados: dict[int, dict[str, float | int]] = {}
 
     for espacio_id, inicio, fin in filas:
@@ -39,13 +36,13 @@ def listar_por_fecha(db: Session, fecha: date) -> list[dict]:
         metricas["reservas_dia"] += 1
         inicio_ocupado = max(inicio, horario_apertura)
         fin_ocupado = min(fin, horario_cierre)
-        if dia_habilitado and fin_ocupado > inicio_ocupado:
+        if fin_ocupado > inicio_ocupado:
             metricas["minutos_reservados"] += (fin_ocupado - inicio_ocupado).total_seconds() / 60
 
     salida = []
     for espacio in espacios:
         metricas = acumulados.get(espacio.id, {"reservas_dia": 0, "minutos_reservados": 0.0})
-        disponibles = MINUTOS_DIA_OPERATIVO if dia_habilitado and espacio.activo else 0
+        disponibles = MINUTOS_DIA_OPERATIVO if espacio.activo else 0
         reservados = round(float(metricas["minutos_reservados"]), 2)
         salida.append(
             {

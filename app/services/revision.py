@@ -68,13 +68,16 @@ def listar_pendientes(db: Session, aprobador: Usuario, espacio_id: int | None = 
 
 def listar_resueltas(
     db: Session,
-    aprobador: Usuario,
+    usuario: Usuario,
     espacio_id: int,
     estado: EstadoSolicitud | None = None,
     fecha_desde: date | None = None,
     fecha_hasta: date | None = None,
 ) -> list[dict]:
-    """Lista decisiones aprobadas o rechazadas de un espacio del aprobador."""
+    """Lista decisiones aprobadas o rechazadas de un espacio.
+
+    El APROBADOR solo ve los espacios que tiene asignados; el ADMIN ve cualquiera.
+    """
     consulta = (
         select(Solicitud, Espacio, Solicitante, Decisor.nombre)
         .join(Espacio, Espacio.id == Solicitud.espacio_id)
@@ -83,9 +86,10 @@ def listar_resueltas(
         .where(
             Solicitud.espacio_id == espacio_id,
             Solicitud.estado.in_((EstadoSolicitud.APROBADA, EstadoSolicitud.RECHAZADA)),
-            gestiona_espacio(Solicitud.espacio_id, aprobador.id),
         )
     )
+    if usuario.rol != Rol.ADMIN:
+        consulta = consulta.where(gestiona_espacio(Solicitud.espacio_id, usuario.id))
     if estado is not None:
         consulta = consulta.where(Solicitud.estado == estado)
     if fecha_desde is not None:

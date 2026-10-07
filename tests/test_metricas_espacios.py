@@ -91,17 +91,27 @@ def test_admin_consulta_metricas_agregadas_y_excluye_canceladas(client, admin, s
     assert fila["activo"] is True
 
 
-def test_porcentaje_es_null_si_espacio_inactivo_o_dia_cerrado(client, admin):
-    domingo = date(2026, 10, 11)
+def test_porcentaje_es_null_si_espacio_inactivo(client, admin):
     espacio = _crear_espacio("Inactivo", activo=False)
 
-    respuesta = client.get(f"{URL}?fecha={domingo.isoformat()}", headers=cabecera(admin))
+    respuesta = client.get(f"{URL}?fecha={date(2026, 10, 6).isoformat()}", headers=cabecera(admin))
 
     assert respuesta.status_code == 200
     fila = next(item for item in respuesta.json() if item["id"] == espacio.id)
     assert fila["reservas_dia"] == 0
     assert fila["minutos_disponibles"] == 0
     assert fila["porcentaje_ocupacion"] is None
+
+
+def test_domingo_tambien_es_dia_reservable(client, admin):
+    domingo = date(2026, 10, 11)
+    espacio = _crear_espacio("Domingo")
+
+    respuesta = client.get(f"{URL}?fecha={domingo.isoformat()}", headers=cabecera(admin))
+
+    fila = next(item for item in respuesta.json() if item["id"] == espacio.id)
+    assert fila["minutos_disponibles"] == 900
+    assert fila["porcentaje_ocupacion"] == 0
 
 
 def test_metricas_solo_disponibles_para_admin(client, solicitante):

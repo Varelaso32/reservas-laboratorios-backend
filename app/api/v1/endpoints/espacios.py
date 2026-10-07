@@ -107,9 +107,9 @@ def cambiar_estado_espacio(
     description=(
         "Devuelve en una sola consulta las métricas de todos los espacios para la fecha indicada. "
         "Solo para ADMIN. Cuenta reservas ACTIVAS que se cruzan con la fecha; las canceladas no "
-        "cuentan. Los minutos reservados se limitan al horario institucional de lunes a sábado "
-        "07:00–22:00. Los espacios inactivos tienen 0 minutos disponibles y porcentaje null. "
-        "Los domingos también tienen 0 minutos disponibles y porcentaje null."
+        "cuentan. Se reserva todos los días, solo de 07:00 a 22:00: cada espacio activo tiene "
+        "900 minutos disponibles por día. Los espacios inactivos tienen 0 minutos disponibles "
+        "y porcentaje null."
     ),
     response_description="Métricas por espacio para la fecha consultada",
     responses={

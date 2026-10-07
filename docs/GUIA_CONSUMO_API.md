@@ -250,7 +250,7 @@ Resumen:
 | POST | `/solicitudes/` | SOLICITANTE | 7.7 |
 | GET | `/solicitudes/mias` | SOLICITANTE | 7.8 |
 | GET | `/solicitudes/pendientes` | APROBADOR | 7.9 |
-| GET | `/solicitudes/resueltas` | APROBADOR | 7.9A |
+| GET | `/solicitudes/resueltas` | APROBADOR o ADMIN | 7.9A |
 | GET | `/solicitudes/{solicitud_id}` | Según el rol | 7.10 |
 | POST | `/solicitudes/{solicitud_id}/aprobar` | APROBADOR | 7.11 |
 | POST | `/solicitudes/{solicitud_id}/rechazar` | APROBADOR | 7.12 |
@@ -540,9 +540,9 @@ consultada, evitando una petición por cada espacio.
 
 Las reservas CANCELADAS no cuentan. `reservas_dia` cuenta las reservas ACTIVAS que se cruzan
 con la fecha. `minutos_reservados` cuenta solo el tiempo dentro del horario institucional,
-lunes a sábado de 07:00 a 22:00 (hora de Colombia). En esos días, un espacio activo tiene
-900 minutos disponibles. En domingo o para espacios inactivos, los minutos disponibles son 0
-y `porcentaje_ocupacion` es `null`.
+de 07:00 a 22:00 (hora de Colombia), todos los días: un espacio activo tiene 900 minutos
+disponibles por día. Para espacios inactivos, los minutos disponibles son 0 y
+`porcentaje_ocupacion` es `null`.
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" \
@@ -589,8 +589,8 @@ Rol **SOLICITANTE**. Registra la solicitud en estado PENDIENTE. Cuerpo JSON:
 |---|---|---|
 | `espacio_id` | Sí | Espacio activo |
 | `fecha` | Sí | `AAAA-MM-DD` |
-| `hora_inicio` | Sí | `HH:MM`, no en el pasado |
-| `hora_fin` | Sí | `HH:MM`, mayor que `hora_inicio` |
+| `hora_inicio` | Sí | `HH:MM`, desde las 07:00, no en el pasado |
+| `hora_fin` | Sí | `HH:MM`, mayor que `hora_inicio`, hasta las 22:00 |
 | `proposito` | Sí | 1 a 500 caracteres; no puede ser solo espacios |
 | `asistentes` | Sí | Mayor que 0 y no mayor que la capacidad del espacio |
 | `equipamiento` | No | Hasta 500 caracteres |
@@ -746,9 +746,10 @@ aprobar, solo rechazar. Conviene deshabilitar el botón "Aprobar" en ese caso.
 
 ### 7.9A GET /solicitudes/resueltas — Historial de solicitudes por espacio
 
-Rol **APROBADOR**. Devuelve las solicitudes APROBADAS y RECHAZADAS de un espacio que administra,
-ordenadas por fecha de resolución descendente. Un espacio no asignado devuelve `[]`. ADMIN no
-puede consultar esta bandeja (403).
+Roles **APROBADOR** y **ADMIN**. Devuelve las solicitudes APROBADAS y RECHAZADAS de un espacio,
+ordenadas por fecha de resolución descendente. El APROBADOR solo ve los espacios que administra
+(uno no asignado devuelve `[]`). El ADMIN ve cualquier espacio, pero solo en consulta: aprobar y
+rechazar siguen siendo exclusivos del APROBADOR.
 
 | Parámetro (query) | Requerido | Descripción |
 |---|---|---|
