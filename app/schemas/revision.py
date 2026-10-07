@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -39,3 +40,16 @@ class SolicitudDetalleOut(SolicitudPendienteOut):
     motivo_rechazo: str | None = Field(description="Motivo, si fue rechazada")
     decidido_por: str | None = Field(description="Nombre de quien aprobó o rechazó")
     fecha_decision: datetime | None = Field(description="Cuándo se aprobó o rechazó")
+
+
+class SolicitudResueltaOut(BaseModel):
+    id: int = Field(description="Identificador de la solicitud")
+    estado: Literal["APROBADA", "RECHAZADA"] = Field(description="Resultado de la solicitud")
+    solicitante: SolicitanteResumen
+    espacio: EspacioResumen
+    inicio: datetime = Field(description="Inicio del uso, hora de Colombia")
+    fin: datetime = Field(description="Fin del uso, hora de Colombia")
+    asistentes: int = Field(description="Cantidad de asistentes")
+    decidida_por: str = Field(description="Nombre del aprobador que resolvió la solicitud")
+    fecha_decision: datetime = Field(description="Fecha y hora de resolución, hora de Colombia")
+    motivo_rechazo: str | None = Field(description="Motivo de rechazo; null si fue aprobada")

@@ -103,6 +103,9 @@ Parámetros de consulta:
 
 Ejemplo: `GET /api/v1/usuarios/?rol=SOLICITANTE&activo=true&skip=0&limit=20`
 
+Cada elemento incluye `reservas_mes`: cantidad de reservas ACTIVAS cuyo inicio cae en el mes
+actual, calculado en hora de Colombia. Las reservas CANCELADAS no cuentan.
+
 Respuesta 200:
 
 ```json
@@ -118,7 +121,8 @@ Respuesta 200:
       "rol": "SOLICITANTE",
       "cargo": "ESTUDIANTE",
       "activo": true,
-      "creado_en": "2026-09-22T20:45:00-05:00"
+      "creado_en": "2026-09-22T20:45:00-05:00",
+      "reservas_mes": 3
     }
   ]
 }

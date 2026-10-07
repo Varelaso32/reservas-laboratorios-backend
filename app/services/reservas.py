@@ -4,13 +4,23 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased
 
-from app.models.enums import EstadoReserva, Rol
+from app.models.enums import AccionTrazabilidad, EstadoReserva, EstadoSolicitud, Rol
 from app.models.modelos import Espacio, Reserva, Solicitud, Usuario
 from app.services.revision import gestiona_espacio
+from app.services import trazabilidad
 from app.utils.fechas import ZONA_COLOMBIA
 
 Titular = aliased(Usuario)
 Aprobador = aliased(Usuario)
+
+
+class ErrorReserva(Exception):
+    """Error de negocio con el código HTTP que le corresponde."""
+
+    def __init__(self, codigo: int, mensaje: str):
+        super().__init__(mensaje)
+        self.codigo = codigo
+        self.mensaje = mensaje
 
 
 def _local(fecha):
@@ -32,6 +42,47 @@ def _resumen(reserva: Reserva, espacio: Espacio) -> dict:
         "fin": _local(reserva.fin),
         "solicitud_id": reserva.solicitud_id,
     }
+
+
+def cancelar(db: Session, usuario: Usuario, reserva_id: int) -> dict:
+    """Cancela una reserva propia que todavía no ha comenzado.
+
+    La operación es idempotente: una reserva ya cancelada se devuelve sin crear
+    otra acción de historial.
+    """
+    reserva = db.scalar(
+        select(Reserva).where(Reserva.id == reserva_id).with_for_update()
+    )
+    if reserva is None or reserva.usuario_id != usuario.id:
+        raise ErrorReserva(404, "La reserva no existe o no tienes acceso a ella")
+
+    espacio = db.get(Espacio, reserva.espacio_id)
+    if reserva.estado == EstadoReserva.CANCELADA:
+        return _resumen(reserva, espacio)
+
+    if reserva.inicio <= datetime.now(ZONA_COLOMBIA):
+        raise ErrorReserva(409, "No se puede cancelar una reserva que ya inició")
+
+    solicitud = db.scalar(
+        select(Solicitud).where(Solicitud.id == reserva.solicitud_id).with_for_update()
+    )
+    if solicitud is None:
+        raise ErrorReserva(409, "La solicitud asociada a la reserva no existe")
+
+    reserva.estado = EstadoReserva.CANCELADA
+    solicitud.estado = EstadoSolicitud.CANCELADA
+    trazabilidad.registrar(
+        db,
+        solicitud_id=solicitud.id,
+        reserva_id=reserva.id,
+        usuario_id=usuario.id,
+        accion=AccionTrazabilidad.CANCELADA,
+        estado_anterior=EstadoSolicitud.APROBADA.value,
+        estado_nuevo=EstadoSolicitud.CANCELADA.value,
+        detalle=f"Reserva #{reserva.id} cancelada por el solicitante",
+    )
+    db.commit()
+    return _resumen(reserva, espacio)
 
 
 def listar_activas(db: Session, usuario: Usuario) -> list[dict]:
