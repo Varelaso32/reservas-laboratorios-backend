@@ -116,6 +116,25 @@ Para detener el servidor presiona `Ctrl + C` en la terminal.
 
 ---
 
+## Red corporativa / error de certificado SSL
+
+En redes con un proxy que inspecciona el tráfico HTTPS, `docker compose up -d --build`
+puede fallar en el paso `pip install` con `CERTIFICATE_VERIFY_FAILED: self-signed certificate in certificate chain`.
+Pasa porque dentro del contenedor no está el certificado raíz del proxy.
+
+Solución:
+
+1. Exporta el certificado raíz del proxy en formato **Base-64 X.509** (en Windows: abre cualquier
+   página HTTPS, ve el certificado, pestaña "Ruta de certificación", selecciona el de más arriba y
+   usa "Copiar en archivo...").
+2. Guárdalo en la carpeta `certs/` con extensión `.crt` (por ejemplo `certs/proxy-empresa.crt`).
+3. Vuelve a construir: `docker compose up -d --build`.
+
+Los `.crt` no se suben al repositorio (están en `.gitignore`). Fuera de esa red no hace falta nada:
+si `certs/` solo tiene el `.gitkeep`, la imagen se construye igual.
+
+---
+
 ## Endpoints actuales (ejemplo de recurso "items")
 
 | Método | Ruta             | Descripción                        |
