@@ -1,14 +1,12 @@
-import os
 from collections.abc import Generator
 
 from sqlalchemy import MetaData, create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-# La URL NO va en el .env: config.py rechaza variables que no tiene declaradas.
-# Por defecto apunta al contenedor "db" del compose.
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql+psycopg://reservas:reservas_dev@db:5432/reservas"
-)
+from app.core.config import settings
+
+# Las credenciales vienen de variables de entorno (.env); ver Settings.database_url
+DATABASE_URL = settings.database_url
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
