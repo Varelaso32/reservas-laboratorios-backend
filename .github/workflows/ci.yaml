@@ -1,50 +1,59 @@
 # ==============================================================================
 # Nombre del Flujo: CI Backend
-# Descripcion: Pipeline de Integracion Continua para la API de reservas 
+# Descripcion: Pipeline de Integracion Continua para la API de reservas
 # de laboratorios. Valida estandares de codigo y pruebas.
 # ==============================================================================
 name: ci Backend
 
 on:
+  # push solo a develop: los pull_request ya cubren las ramas del proyecto,
+  # asi se evita la doble ejecucion (push + pull_request) sobre lo mismo.
   push:
-    branches: [ main, develop, qa ]
+    branches: [ develop ]
   pull_request:
     branches: [ main, develop, qa ]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-backend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # ============================================================================
-  # 1. LINT: Analiza el código Python buscando errores de sintaxis y estilo.
+  # 1. LINT: Analiza el codigo Python con Ruff (unico estandar del repo).
   # ============================================================================
   lint:
     name: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Checkout del código
+      - name: Checkout del codigo
         uses: actions/checkout@v4
 
-      # Se configura Python 3.13 según la versión instalada en la documentación
       - name: Configurar Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
           cache: 'pip'
 
-      - name: Instalar dependencias base y Flake8
+      - name: Instalar Ruff
         run: |
           python -m pip install --upgrade pip
-          pip install flake8
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install "ruff==0.16.8"
 
-      - name: Ejecutar Linter (Flake8)
-        # Detiene el flujo si hay errores críticos de sintaxis o variables no definidas
-        run: flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics    
+      - name: Ejecutar Linter (Ruff)
+        # La config de reglas vive en pyproject.toml ([tool.ruff])
+        run: ruff check app
 
-# ============================================================================
-  # 2. TEST: Ejecuta las pruebas de los endpoints y lógica de negocio.
+  # ============================================================================
+  # 2. TEST: Ejecuta las pruebas de los endpoints y logica de negocio.
   # ============================================================================
   test:
     name: test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     # BD Postgres para los tests: el conftest de pytest crea ahi la BD
     # 'reservas_test'. El job corre en el runner (sin contenedor), por eso
@@ -68,7 +77,7 @@ jobs:
           --health-retries 10
 
     steps:
-      - name: Checkout del código
+      - name: Checkout del codigo
         uses: actions/checkout@v4
 
       - name: Configurar Python
@@ -77,10 +86,10 @@ jobs:
           python-version: '3.13'
           cache: 'pip'
 
-      - name: Instalar dependencias de la app y Pytest
+      - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
-          pip install pytest httpx
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install -r requirements-dev.txt
 
-          pytest tests/ --maxfail=1 --disable-warnings -q
+      - name: Ejecutar pruebas
+        run: pytest tests/ --maxfail=1 --disable-warnings -q
