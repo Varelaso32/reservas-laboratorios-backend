@@ -49,16 +49,16 @@ def _salida(sol: Solicitud, esp: Espacio, solicitante: Usuario) -> dict:
     }
 
 
-def listar_pendientes(db: Session, aprobador: Usuario, espacio_id: int | None = None) -> list[dict]:
+def listar_pendientes(db: Session, usuario: Usuario, espacio_id: int | None = None) -> list[dict]:
+    """El APROBADOR ve las de sus espacios; el ADMIN las de todos, solo para consulta."""
     consulta = (
         select(Solicitud, Espacio, Solicitante)
         .join(Espacio, Espacio.id == Solicitud.espacio_id)
         .join(Solicitante, Solicitante.id == Solicitud.solicitante_id)
-        .where(
-            Solicitud.estado == EstadoSolicitud.PENDIENTE,
-            gestiona_espacio(Solicitud.espacio_id, aprobador.id),
-        )
+        .where(Solicitud.estado == EstadoSolicitud.PENDIENTE)
     )
+    if usuario.rol != Rol.ADMIN:
+        consulta = consulta.where(gestiona_espacio(Solicitud.espacio_id, usuario.id))
     if espacio_id is not None:
         consulta = consulta.where(Solicitud.espacio_id == espacio_id)
     # Primero las que se usan más pronto: son las más urgentes de decidir

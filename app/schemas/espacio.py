@@ -31,6 +31,40 @@ class EspacioMetricaOut(BaseModel):
     )
 
 
+class EspacioCrear(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "example": {
+                "nombre": "Laboratorio de Redes",
+                "tipo": "LABORATORIO",
+                "capacidad": 25,
+                "ubicacion": "Bloque A, piso 2",
+            }
+        },
+    )
+
+    nombre: str = Field(max_length=120, description="Nombre del espacio, único")
+    tipo: TipoEspacio = Field(description="LABORATORIO o SALA")
+    capacidad: int = Field(gt=0, description="Número máximo de personas")
+    ubicacion: str | None = Field(None, max_length=200, description="Bloque y piso (opcional)")
+
+    @field_validator("nombre")
+    @classmethod
+    def _nombre_no_vacio(cls, valor: str) -> str:
+        nombre = valor.strip()
+        if not nombre:
+            raise ValueError("El nombre no puede estar vacío")
+        return nombre
+
+    @field_validator("ubicacion")
+    @classmethod
+    def _normalizar_ubicacion(cls, valor: str | None) -> str | None:
+        if valor is None:
+            return None
+        return valor.strip() or None
+
+
 class EspacioActualizar(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

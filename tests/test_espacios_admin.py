@@ -189,3 +189,44 @@ def test_no_aprueba_solicitud_que_supera_capacidad_actual(client, crear_usuario,
     with SessionLocal() as db:
         assert db.get(Solicitud, solicitud_id).estado == EstadoSolicitud.PENDIENTE
         assert db.scalar(select(Reserva.id).where(Reserva.solicitud_id == solicitud_id)) is None
+
+
+def test_admin_crea_espacio(client, admin):
+    cuerpo = {"nombre": f"  Sala nueva {uuid4().hex}  ", "tipo": "SALA", "capacidad": 12, "ubicacion": " Bloque B "}
+
+    respuesta = client.post(f"{URL}/", json=cuerpo, headers=cabecera(admin))
+
+    assert respuesta.status_code == 201
+    datos = respuesta.json()
+    assert datos["id"] > 0
+    assert datos["nombre"] == cuerpo["nombre"].strip()
+    assert datos["ubicacion"] == "Bloque B"
+    assert datos["activo"] is True
+
+
+def test_crear_espacio_con_nombre_duplicado_responde_409(client, admin):
+    existente = _crear_espacio("Duplicado")
+
+    respuesta = client.post(
+        f"{URL}/",
+        json={"nombre": existente.nombre, "tipo": "LABORATORIO", "capacidad": 5},
+        headers=cabecera(admin),
+    )
+
+    assert respuesta.status_code == 409
+
+
+def test_crear_espacio_valida_datos(client, admin):
+    respuesta = client.post(
+        f"{URL}/", json={"nombre": "   ", "tipo": "SALA", "capacidad": 0}, headers=cabecera(admin)
+    )
+
+    assert respuesta.status_code == 422
+
+
+def test_solo_admin_crea_espacios(client, solicitante):
+    respuesta = client.post(
+        f"{URL}/", json={"nombre": "No permitido", "tipo": "SALA", "capacidad": 5}, headers=cabecera(solicitante)
+    )
+
+    assert respuesta.status_code == 403

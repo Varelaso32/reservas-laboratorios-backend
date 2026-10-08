@@ -48,6 +48,7 @@ Cada paso queda en el historial: CREADA, APROBADA, RECHAZADA.
 | Método | Ruta | Resumen | Rol | HU | Fase |
 |---|---|---|---|---|---|
 | GET | /api/v1/espacios/ | Listar espacios activos | Público | HU-01 | 1 |
+| POST | /api/v1/espacios/ | Crear un espacio | ADMIN | HU-19 | — |
 | GET | /api/v1/espacios/admin | Listar espacios activos e inactivos | ADMIN | — | — |
 | GET | /api/v1/espacios/disponibles | Consultar espacios disponibles | Público | HU-01 | 1 |
 | GET | /api/v1/espacios/{espacio_id}/disponibilidad | Validar disponibilidad de un espacio | Público | HU-05 | 3 |
@@ -58,12 +59,12 @@ Cada paso queda en el historial: CREADA, APROBADA, RECHAZADA.
 | GET | /api/v1/auth/me | Usuario actual | Cualquiera con sesión | Base | 2 |
 | POST | /api/v1/solicitudes/ | Crear solicitud de reserva | SOLICITANTE | HU-04, HU-05 | 3 |
 | GET | /api/v1/solicitudes/mias | Mis solicitudes | SOLICITANTE | HU-10.6, HU-11.7 | 3 |
-| GET | /api/v1/solicitudes/pendientes | Pendientes de mis espacios | APROBADOR | HU-08 | 4 |
+| GET | /api/v1/solicitudes/pendientes | Pendientes de mis espacios | APROBADOR (sus espacios), ADMIN (todos, solo consulta) | HU-08 | 4 |
 | GET | /api/v1/solicitudes/resueltas | Historial de solicitudes por espacio | APROBADOR (sus espacios), ADMIN (todos, solo consulta) | — | 4 |
 | GET | /api/v1/solicitudes/{solicitud_id} | Detalle de una solicitud | APROBADOR (sus espacios), SOLICITANTE (las suyas), ADMIN (todas) | HU-09 | 4 |
 | POST | /api/v1/solicitudes/{solicitud_id}/aprobar | Aprobar y generar la reserva | APROBADOR (sus espacios) | HU-10, HU-13 | 5 |
 | POST | /api/v1/solicitudes/{solicitud_id}/rechazar | Rechazar con motivo | APROBADOR (sus espacios) | HU-11 | 5 |
-| GET | /api/v1/reservas/mias | Mis reservas activas | SOLICITANTE | HU-14 | 6 |
+| GET | /api/v1/reservas/mias | Mis reservas (opcional: también canceladas) | SOLICITANTE | HU-14 | 6 |
 | POST | /api/v1/reservas/{reserva_id}/cancelar | Cancelar una reserva propia | SOLICITANTE | — | 6 |
 | GET | /api/v1/reservas/{reserva_id} | Detalle de una reserva | SOLICITANTE (las suyas), APROBADOR (sus espacios), ADMIN (todas) | HU-14 | 6 |
 | GET | /api/v1/solicitudes/{solicitud_id}/historial | Historial de una solicitud | SOLICITANTE (las suyas), APROBADOR (sus espacios), ADMIN (todas) | HU-24 | 7 |
@@ -145,6 +146,28 @@ Respuesta 200:
   }
 ]
 ```
+
+### POST /api/v1/espacios/
+
+HU-19. Crea un laboratorio o sala. Solo rol ADMIN. Se envía como JSON.
+
+| Campo | Tipo | Requerido | Descripción |
+|---|---|---|---|
+| nombre | texto (hasta 120) | Sí | Único. Se recorta y no puede quedar vacío |
+| tipo | LABORATORIO / SALA | Sí | Tipo de espacio |
+| capacidad | entero mayor que 0 | Sí | Número máximo de personas |
+| ubicacion | texto (hasta 200) | No | Bloque y piso |
+
+Respuesta 201: el espacio creado (id, nombre, tipo, capacidad, ubicacion, activo: true).
+Queda sin aprobadores asignados.
+
+| Código | Cuándo |
+|---|---|
+| 201 | Espacio creado |
+| 401 | No autenticado |
+| 403 | El usuario no es ADMIN |
+| 409 | Ya existe un espacio con ese nombre |
+| 422 | Datos inválidos o campos no permitidos |
 
 ### GET /api/v1/espacios/admin
 
@@ -271,8 +294,9 @@ Solo rol SOLICITANTE. Muestra si fue aprobada y, si fue rechazada, el motivo.
 
 ### GET /api/v1/solicitudes/pendientes
 
-HU-08. Solicitudes PENDIENTE de los espacios que administra el aprobador. Solo rol
-APROBADOR. No muestra solicitudes de otros espacios.
+HU-08. Solicitudes PENDIENTE de los espacios que administra el aprobador. No muestra
+solicitudes de otros espacios. El ADMIN también puede consultarla y ve las de todos los
+espacios, solo en lectura: aprobar y rechazar siguen siendo exclusivos del APROBADOR.
 
 | Parámetro | Tipo | Requerido | Descripción |
 |---|---|---|---|
@@ -395,11 +419,15 @@ Ejemplo de cuerpo: {"motivo": "El laboratorio está en mantenimiento esa semana"
 
 ### GET /api/v1/reservas/mias
 
-HU-14. Reservas ACTIVAS del usuario que inició sesión que todavía no han terminado,
+HU-14. Reservas del usuario que inició sesión que todavía no han terminado,
 ordenadas por fecha y hora de inicio. Solo rol SOLICITANTE. Solo se ven las propias.
 
+| Parámetro | Tipo | Requerido | Descripción |
+|---|---|---|---|
+| incluir_canceladas | booleano | No | `true` incluye también las CANCELADAS. Por defecto `false` |
+
 No aparecen:
-- Las reservas canceladas (criterio 5).
+- Las reservas canceladas (criterio 5), salvo con `incluir_canceladas=true`.
 - Las que ya terminaron (su hora de fin ya pasó).
 
 Cada elemento trae: id, estado, espacio (id, nombre, tipo, capacidad, ubicacion),

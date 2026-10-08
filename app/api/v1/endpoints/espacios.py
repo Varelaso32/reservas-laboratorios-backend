@@ -1,7 +1,7 @@
 """Tarea: Backend - endpoint listar espacios y consultar disponibilidad por fecha/horario (HU-01)."""
 from datetime import date, time
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import requiere_rol
@@ -11,6 +11,7 @@ from app.models.modelos import Usuario
 from app.schemas.espacio import (
     EspacioActualizar,
     EspacioAdminOut,
+    EspacioCrear,
     EspacioEstadoActualizar,
     EspacioMetricaOut,
     EspacioOut,
@@ -27,6 +28,31 @@ def _ejecutar(db: Session, accion, *args):
     except gestion_espacios.ErrorEspacio as error:
         db.rollback()
         raise HTTPException(status_code=error.codigo, detail=error.mensaje)
+
+
+@router.post(
+    "/",
+    response_model=EspacioAdminOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Crear un espacio",
+    description=(
+        "**HU-19.** Registra un laboratorio o sala. Solo para ADMIN. El espacio queda activo "
+        "y sin aprobadores asignados. El nombre debe ser único."
+    ),
+    response_description="Espacio creado, con su id",
+    responses={
+        401: {"description": "No autenticado"},
+        403: {"description": "Solo para usuarios ADMIN"},
+        409: {"description": "Ya existe un espacio con ese nombre"},
+        422: {"description": "Datos inválidos"},
+    },
+)
+def crear_espacio(
+    datos: EspacioCrear,
+    _admin: Usuario = Depends(requiere_rol(Rol.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    return _ejecutar(db, gestion_espacios.crear, datos)
 
 
 @router.get(
