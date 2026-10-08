@@ -92,4 +92,39 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Ejecutar pruebas
-        run: pytest tests/ --maxfail=1 --disable-warnings -q
+        # --cov genera coverage.xml que SonarQube usa para medir la cobertura
+        # (el Quality Gate exige >=80% en codigo nuevo)
+        run: pytest tests/ --maxfail=1 --disable-warnings -q --cov=app --cov-report=xml:coverage.xml
+
+      - name: Subir reporte de cobertura
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.xml
+
+  # ============================================================================
+  # 3. SONAR: Analiza el codigo en SonarQube Cloud y espera el Quality Gate.
+  # Si el gate no pasa, este job falla y deja el PR en rojo.
+  # ============================================================================
+  sonar:
+    name: sonar
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout del codigo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Descargar reporte de cobertura
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v7
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: -Dsonar.qualitygate.wait=true
