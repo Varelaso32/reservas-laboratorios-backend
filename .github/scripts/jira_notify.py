@@ -113,7 +113,7 @@ def guardar_estado(eventos):
 
 
 def obtener_issues(ventana):
-    jql = f"updated >= \"{fmt_jql_date(ventana)}\" ORDER BY updated DESC"
+    jql = f"updated >= -{LOOKBACK_MIN}m ORDER BY updated DESC"
     issues = []
     token = None
     while len(issues) < MAX_ISSUES:
@@ -140,10 +140,11 @@ def eventos_de_issue(issue, ventana, ya_vistos):
     eventos = []
 
     creado = parse_fecha(campos.get("created") or fmt_jql_date(ventana))
-    if creado >= ventana:
+    eid_creado = f"created:{key}"
+    if creado >= ventana and eid_creado not in ya_vistos:
         eventos.append((
             creado,
-            f"created:{key}",
+            eid_creado,
             "Nuevo issue {0}: {1}\n{2}\n{3}".format(
                 (campos.get("issuetype") or {}).get("name", "Issue"),
                 titulo,
@@ -159,7 +160,7 @@ def eventos_de_issue(issue, ventana, ya_vistos):
         if total > 100:
             cambio = jira_get(f"/rest/api/3/issue/{key}/changelog",
                               {"maxResults": 100, "startAt": total - 100})
-        for historia in cambio.get("histories", []):
+        for historia in cambio.get("values", []):
             cuando = parse_fecha(historia["created"])
             if cuando < ventana:
                 continue
