@@ -45,6 +45,28 @@ jobs:
   test:
     name: test
     runs-on: ubuntu-latest
+
+    # BD Postgres para los tests: el conftest de pytest crea ahi la BD
+    # 'reservas_test'. El job corre en el runner (sin contenedor), por eso
+    # el servicio se alcanza via localhost y no via el hostname 'db' del compose.
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://reservas:reservas_dev@localhost:5432/reservas_test
+
+    services:
+      db:
+        image: postgres:17
+        env:
+          POSTGRES_USER: reservas
+          POSTGRES_PASSWORD: reservas_dev
+          POSTGRES_DB: reservas
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U reservas -d reservas"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - name: Checkout del código
         uses: actions/checkout@v4
