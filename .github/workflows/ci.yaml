@@ -58,15 +58,17 @@ jobs:
     # BD Postgres para los tests: el conftest de pytest crea ahi la BD
     # 'reservas_test'. El job corre en el runner (sin contenedor), por eso
     # el servicio se alcanza via localhost y no via el hostname 'db' del compose.
+    # La clave es de una BD desechable que solo existe durante el job; no es la
+    # de ningun entorno real.
     env:
-      TEST_DATABASE_URL: postgresql+psycopg://reservas:reservas_dev@localhost:5432/reservas_test
+      TEST_DATABASE_URL: postgresql+psycopg://reservas:ci_solo_pruebas@localhost:5432/reservas_test
 
     services:
       db:
         image: postgres:17
         env:
           POSTGRES_USER: reservas
-          POSTGRES_PASSWORD: reservas_dev
+          POSTGRES_PASSWORD: ci_solo_pruebas
           POSTGRES_DB: reservas
         ports:
           - 5432:5432

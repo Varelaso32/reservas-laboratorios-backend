@@ -8,14 +8,26 @@ Uso: docker compose exec api python -m pytest
 import os
 
 import pytest
+from sqlalchemy.engine import URL
 
-TEST_DATABASE_URL = os.getenv(
-    "TEST_DATABASE_URL", "postgresql+psycopg://reservas:reservas_dev@db:5432/reservas_test"
-)
+# TEST_DATABASE_URL completa (la usa la CI) o, si no está, las POSTGRES_* del entorno
+# (el compose se las pasa al contenedor desde el .env). La clave nunca va en el código.
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+if not TEST_DATABASE_URL:
+    if not os.getenv("POSTGRES_PASSWORD"):
+        pytest.exit("Define TEST_DATABASE_URL o POSTGRES_PASSWORD (ver .env.example)", returncode=1)
+    TEST_DATABASE_URL = URL.create(
+        "postgresql+psycopg",
+        username=os.getenv("POSTGRES_USER", "reservas"),
+        password=os.getenv("POSTGRES_PASSWORD"),
+        host=os.getenv("POSTGRES_HOST", "db"),
+        port=int(os.getenv("POSTGRES_PORT", "5432")),
+        database="reservas_test",
+    ).render_as_string(hide_password=False)
 
 # Protección: las pruebas vacían tablas. Si la URL no es la de pruebas, no se corre nada.
 if not TEST_DATABASE_URL.endswith("reservas_test"):
-    pytest.exit(f"TEST_DATABASE_URL debe terminar en 'reservas_test'. Se recibió: {TEST_DATABASE_URL}", returncode=1)
+    pytest.exit("TEST_DATABASE_URL debe terminar en 'reservas_test'", returncode=1)
 
 # database.py crea el engine al importarse: la variable se fija antes de importar la app
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
