@@ -36,4 +36,4 @@ def registrarse(datos: RegistroCrear, db: Session = Depends(get_db)):
         return usuarios.registrar(db, datos)
     except usuarios.ErrorUsuario as error:
         db.rollback()
-        raise HTTPException(status_code=error.codigo, detail=error.mensaje)
+        raise HTTPException(status_code=error.codigo, detail=error.mensaje) from error

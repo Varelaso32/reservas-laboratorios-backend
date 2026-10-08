@@ -6,7 +6,7 @@ from app.api.deps import requiere_rol
 from app.core.database import get_db
 from app.models.enums import EstadoSolicitud, Rol
 from app.models.modelos import Usuario
-from app.schemas.solicitud import SolicitudCrear, SolicitudCreadaOut, SolicitudOut
+from app.schemas.solicitud import SolicitudCreadaOut, SolicitudCrear, SolicitudOut
 from app.services import solicitudes
 
 router = APIRouter()
@@ -50,7 +50,7 @@ def crear_solicitud(
         resultado = solicitudes.crear(db, usuario, datos)
     except solicitudes.ErrorSolicitud as error:
         db.rollback()
-        raise HTTPException(status_code=error.codigo, detail=error.mensaje)
+        raise HTTPException(status_code=error.codigo, detail=error.mensaje) from error
     resultado["mensaje"] = f"Solicitud #{resultado['id']} registrada. Quedó en estado PENDIENTE."
     return resultado
 

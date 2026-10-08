@@ -44,7 +44,12 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
     if not usuario.activo:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="El usuario está inactivo")
     token, segundos = crear_token(usuario.id, usuario.rol.value)
-    return TokenOut(access_token=token, token_type="bearer", expira_en=segundos, usuario=usuario)
+    return TokenOut(
+        access_token=token,
+        token_type="bearer",  # noqa: S106 - tipo estandar OAuth2, no un secreto
+        expira_en=segundos,
+        usuario=usuario,
+    )
 
 
 @router.get(

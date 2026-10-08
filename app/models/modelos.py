@@ -1,15 +1,32 @@
 from datetime import datetime
 
 from sqlalchemy import (
-    BigInteger, Boolean, CheckConstraint, Column, DateTime, Enum, ForeignKey,
-    Index, Integer, String, Table, Text, func, text,
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Table,
+    Text,
+    func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ExcludeConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 from app.models.enums import (
-    AccionTrazabilidad, Cargo, EstadoReserva, EstadoSolicitud, Rol, TipoEspacio,
+    AccionTrazabilidad,
+    Cargo,
+    EstadoReserva,
+    EstadoSolicitud,
+    Rol,
+    TipoEspacio,
 )
 
 

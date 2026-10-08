@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session, aliased
 
 from app.models.enums import AccionTrazabilidad, EstadoReserva, EstadoSolicitud, Rol
 from app.models.modelos import Espacio, Reserva, Solicitud, Usuario
-from app.services.revision import gestiona_espacio
 from app.services import trazabilidad
+from app.services.revision import gestiona_espacio
 from app.utils.fechas import ZONA_COLOMBIA
 
 Titular = aliased(Usuario)

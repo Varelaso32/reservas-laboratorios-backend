@@ -36,7 +36,7 @@ def get_usuario_actual(
         datos = leer_token(token)
         usuario_id = int(datos["sub"])
     except (jwt.PyJWTError, ValueError, KeyError):
-        raise _NO_AUTENTICADO
+        raise _NO_AUTENTICADO from None
     usuario = db.get(Usuario, usuario_id)
     # Se consulta la BD en cada petición: un usuario desactivado pierde el acceso
     # de inmediato, aunque su token todavía no haya expirado.

@@ -49,7 +49,7 @@ def aprobar_solicitud(
         return decision.aprobar(db, usuario, solicitud_id)
     except decision.ErrorDecision as error:
         db.rollback()
-        raise HTTPException(status_code=error.codigo, detail=error.mensaje)
+        raise HTTPException(status_code=error.codigo, detail=error.mensaje) from error
 
 
 @router.post(
@@ -75,4 +75,4 @@ def rechazar_solicitud(
         return decision.rechazar(db, usuario, solicitud_id, datos.motivo)
     except decision.ErrorDecision as error:
         db.rollback()
-        raise HTTPException(status_code=error.codigo, detail=error.mensaje)
+        raise HTTPException(status_code=error.codigo, detail=error.mensaje) from error

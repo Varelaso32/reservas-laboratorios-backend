@@ -41,7 +41,7 @@ def _guardar(db: Session, espacio: Espacio) -> Espacio:
         db.flush()
     except IntegrityError as error:
         if _INDICE_NOMBRE in str(error.orig):
-            raise ErrorEspacio(409, _NOMBRE_DUPLICADO)
+            raise ErrorEspacio(409, _NOMBRE_DUPLICADO) from error
         raise
     db.commit()
     db.refresh(espacio)
