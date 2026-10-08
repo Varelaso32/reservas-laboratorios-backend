@@ -1,0 +1,40 @@
+import enum
+
+
+class Rol(str, enum.Enum):
+    SOLICITANTE = "SOLICITANTE"
+    APROBADOR = "APROBADOR"
+    ADMIN = "ADMIN"
+
+
+class Cargo(str, enum.Enum):
+    ESTUDIANTE = "ESTUDIANTE"
+    DOCENTE = "DOCENTE"
+    ADMINISTRATIVO = "ADMINISTRATIVO"
+    COORDINADOR_LABORATORIOS = "COORDINADOR_LABORATORIOS"
+    ADMINISTRADOR_SALA = "ADMINISTRADOR_SALA"
+    ADMINISTRADOR_SISTEMA = "ADMINISTRADOR_SISTEMA"
+
+
+class TipoEspacio(str, enum.Enum):
+    LABORATORIO = "LABORATORIO"
+    SALA = "SALA"
+
+
+class EstadoSolicitud(str, enum.Enum):
+    PENDIENTE = "PENDIENTE"
+    APROBADA = "APROBADA"
+    RECHAZADA = "RECHAZADA"
+    CANCELADA = "CANCELADA"
+
+
+class EstadoReserva(str, enum.Enum):
+    ACTIVA = "ACTIVA"
+    CANCELADA = "CANCELADA"
+
+
+class AccionTrazabilidad(str, enum.Enum):
+    CREADA = "CREADA"
+    APROBADA = "APROBADA"
+    RECHAZADA = "RECHAZADA"
+    CANCELADA = "CANCELADA"

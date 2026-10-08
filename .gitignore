@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.example
 .venv/
 venv/
 __pycache__/
@@ -9,3 +11,6 @@ __pycache__/
 .ruff_cache/
 dist/
 build/
+certs/*.crt
+.vs/
+.idea/
