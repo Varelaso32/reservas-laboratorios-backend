@@ -27,7 +27,7 @@ def _ejecutar(db: Session, accion, *args):
         return accion(db, *args)
     except gestion_espacios.ErrorEspacio as error:
         db.rollback()
-        raise HTTPException(status_code=error.codigo, detail=error.mensaje)
+        raise HTTPException(status_code=error.codigo, detail=error.mensaje) from error
 
 
 @router.post(
@@ -197,5 +197,5 @@ def consultar_disponibles(
     try:
         inicio, fin = disponibilidad.construir_rango(fecha, hora_inicio, hora_fin)
     except disponibilidad.RangoInvalido as error:
-        raise HTTPException(status_code=422, detail=str(error))
+        raise HTTPException(status_code=422, detail=str(error)) from error
     return disponibilidad.listar_disponibles(db, inicio, fin, tipo)

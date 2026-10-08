@@ -81,7 +81,7 @@ def aprobar(db: Session, aprobador: Usuario, solicitud_id: int) -> dict:
     except IntegrityError as error:
         # Dos aprobaciones simultáneas del mismo horario: la BD deja pasar solo una
         if "ex_reserva_sin_cruce" in str(error.orig):
-            raise ErrorDecision(409, "El espacio ya fue reservado en ese horario por otra solicitud aprobada")
+            raise ErrorDecision(409, "El espacio ya fue reservado en ese horario por otra solicitud aprobada") from error
         raise
 
     trazabilidad.registrar(

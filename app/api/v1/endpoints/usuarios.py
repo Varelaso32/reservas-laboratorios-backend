@@ -7,7 +7,11 @@ from app.core.database import get_db
 from app.models.enums import Rol
 from app.models.modelos import Usuario
 from app.schemas.usuario import (
-    UsuarioActualizar, UsuarioCrear, UsuarioDetalleOut, UsuarioEstadoActualizar, UsuarioListaOut,
+    UsuarioActualizar,
+    UsuarioCrear,
+    UsuarioDetalleOut,
+    UsuarioEstadoActualizar,
+    UsuarioListaOut,
 )
 from app.services import usuarios
 
@@ -27,7 +31,7 @@ def _ejecutar(db: Session, accion, *args):
         return accion(db, *args)
     except usuarios.ErrorUsuario as error:
         db.rollback()
-        raise HTTPException(status_code=error.codigo, detail=error.mensaje)
+        raise HTTPException(status_code=error.codigo, detail=error.mensaje) from error
 
 
 @router.post(

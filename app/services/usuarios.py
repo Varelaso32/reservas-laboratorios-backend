@@ -60,7 +60,7 @@ def _guardar(db: Session) -> None:
         db.flush()
     except IntegrityError as error:
         if _INDICE_EMAIL in str(error.orig):
-            raise ErrorUsuario(409, _EMAIL_DUPLICADO)
+            raise ErrorUsuario(409, _EMAIL_DUPLICADO) from error
         raise
 
 

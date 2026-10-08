@@ -1,6 +1,6 @@
 """Claves y tokens JWT (fase 2)."""
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from pwdlib import PasswordHash
@@ -34,7 +34,7 @@ def verificar_clave(clave: str, clave_hash: str | None) -> bool:
 
 
 def crear_token(usuario_id: int, rol: str) -> tuple[str, int]:
-    expira = datetime.now(timezone.utc) + timedelta(minutes=JWT_EXPIRA_MINUTOS)
+    expira = datetime.now(UTC) + timedelta(minutes=JWT_EXPIRA_MINUTOS)
     # "sub" debe ser texto: PyJWT 2.10+ rechaza tokens con sub numérico
     datos = {"sub": str(usuario_id), "rol": rol, "exp": expira}
     return jwt.encode(datos, JWT_SECRET, algorithm=JWT_ALGORITMO), JWT_EXPIRA_MINUTOS * 60
