@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models.enums import AccionTrazabilidad, EstadoReserva, EstadoSolicitud
+from app.models.enums import AccionTrazabilidad, EstadoReserva, EstadoSolicitud, Rol
 from app.models.modelos import Espacio, Reserva, Solicitud, Usuario
 from app.services import disponibilidad, revision, trazabilidad
 from app.utils.fechas import ZONA_COLOMBIA
@@ -29,7 +29,10 @@ def _tomar_pendiente(db: Session, aprobador: Usuario, solicitud_id: int) -> Soli
     no_encontrada = ErrorDecision(404, "La solicitud no existe o no tienes acceso a ella")
     if solicitud is None:
         raise no_encontrada
-    if not db.scalar(select(revision.gestiona_espacio(solicitud.espacio_id, aprobador.id))):
+    # El ADMIN decide en cualquier espacio; el APROBADOR solo en los asignados
+    if aprobador.rol != Rol.ADMIN and not db.scalar(
+        select(revision.gestiona_espacio(solicitud.espacio_id, aprobador.id))
+    ):
         raise no_encontrada
     if solicitud.estado != EstadoSolicitud.PENDIENTE:
         raise ErrorDecision(409, f"La solicitud ya no está pendiente (estado actual: {solicitud.estado.value})")

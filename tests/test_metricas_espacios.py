@@ -3,8 +3,8 @@ from datetime import date, datetime, time
 from uuid import uuid4
 
 from app.core.database import SessionLocal
-from app.models.enums import EstadoReserva, EstadoSolicitud, TipoEspacio
-from app.models.modelos import Espacio, Reserva, Solicitud
+from app.models.enums import EstadoReserva, EstadoSolicitud, Rol, TipoEspacio
+from app.models.modelos import Espacio, Reserva, Solicitud, espacio_aprobador
 from app.utils.fechas import ZONA_COLOMBIA
 from tests.conftest import cabecera
 
@@ -121,3 +121,31 @@ def test_metricas_solo_disponibles_para_admin(client, solicitante):
     )
 
     assert respuesta.status_code == 403
+
+
+def test_aprobador_ve_metricas_solo_de_sus_espacios(client, solicitante, crear_usuario):
+    aprobador = crear_usuario("coordinador-metricas@reservas.test", Rol.APROBADOR)
+    fecha = date(2026, 10, 6)
+    propio = _crear_espacio("Propio")
+    ajeno = _crear_espacio("Ajeno")
+    with SessionLocal() as db:
+        db.execute(espacio_aprobador.insert().values(espacio_id=propio.id, usuario_id=aprobador.id))
+        db.commit()
+    _crear_reserva(
+        propio.id, solicitante.id,
+        datetime.combine(fecha, time(8), ZONA_COLOMBIA), datetime.combine(fecha, time(9), ZONA_COLOMBIA),
+        EstadoReserva.ACTIVA,
+    )
+    _crear_reserva(
+        ajeno.id, solicitante.id,
+        datetime.combine(fecha, time(8), ZONA_COLOMBIA), datetime.combine(fecha, time(9), ZONA_COLOMBIA),
+        EstadoReserva.ACTIVA,
+    )
+
+    respuesta = client.get(f"{URL}?fecha={fecha.isoformat()}", headers=cabecera(aprobador))
+
+    assert respuesta.status_code == 200
+    filas = respuesta.json()
+    assert [fila["id"] for fila in filas] == [propio.id]
+    assert filas[0]["reservas_dia"] == 1
+    assert filas[0]["minutos_reservados"] == 60

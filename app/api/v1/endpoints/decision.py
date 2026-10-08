@@ -14,7 +14,7 @@ router = APIRouter()
 
 _ERRORES = {
     401: {"description": "No autenticado"},
-    403: {"description": "Solo para usuarios APROBADOR"},
+    403: {"description": "Solo para usuarios APROBADOR o ADMIN"},
     404: {"description": "La solicitud no existe o no pertenece a un espacio que administras"},
     409: {"description": "La solicitud ya no está pendiente, está vencida, o el espacio ya fue reservado en ese horario"},
 }
@@ -42,7 +42,7 @@ _ERRORES = {
 )
 def aprobar_solicitud(
     solicitud_id: int,
-    usuario: Usuario = Depends(requiere_rol(Rol.APROBADOR)),
+    usuario: Usuario = Depends(requiere_rol(Rol.APROBADOR, Rol.ADMIN)),
     db: Session = Depends(get_db),
 ):
     try:
@@ -68,7 +68,7 @@ def aprobar_solicitud(
 def rechazar_solicitud(
     solicitud_id: int,
     datos: RechazoIn,
-    usuario: Usuario = Depends(requiere_rol(Rol.APROBADOR)),
+    usuario: Usuario = Depends(requiere_rol(Rol.APROBADOR, Rol.ADMIN)),
     db: Session = Depends(get_db),
 ):
     try:

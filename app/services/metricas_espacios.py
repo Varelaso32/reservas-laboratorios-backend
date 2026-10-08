@@ -5,15 +5,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.enums import EstadoReserva
-from app.models.modelos import Espacio, Reserva
+from app.models.modelos import Reserva, Usuario
+from app.services.espacios import visibles_para
 from app.utils.fechas import HORA_APERTURA, HORA_CIERRE, ZONA_COLOMBIA
 
 MINUTOS_DIA_OPERATIVO = (HORA_CIERRE.hour - HORA_APERTURA.hour) * 60
 
 
-def listar_por_fecha(db: Session, fecha: date) -> list[dict]:
-    """Devuelve las métricas de todos los espacios para una fecha local."""
-    espacios = db.scalars(select(Espacio).order_by(Espacio.tipo, Espacio.nombre)).all()
+def listar_por_fecha(db: Session, usuario: Usuario, fecha: date) -> list[dict]:
+    """Métricas de una fecha local: el ADMIN ve todos los espacios, el APROBADOR los suyos."""
+    espacios = db.scalars(visibles_para(usuario)).all()
     inicio_dia = datetime.combine(fecha, time.min, ZONA_COLOMBIA)
     fin_dia = inicio_dia + timedelta(days=1)
 
@@ -21,6 +22,7 @@ def listar_por_fecha(db: Session, fecha: date) -> list[dict]:
         select(Reserva.espacio_id, Reserva.inicio, Reserva.fin)
         .where(
             Reserva.estado == EstadoReserva.ACTIVA,
+            Reserva.espacio_id.in_([espacio.id for espacio in espacios]),
             Reserva.inicio < fin_dia,
             Reserva.fin > inicio_dia,
         )

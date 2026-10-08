@@ -224,9 +224,76 @@ def test_crear_espacio_valida_datos(client, admin):
     assert respuesta.status_code == 422
 
 
-def test_solo_admin_crea_espacios(client, solicitante):
+def test_solicitante_no_crea_espacios(client, solicitante):
     respuesta = client.post(
         f"{URL}/", json={"nombre": "No permitido", "tipo": "SALA", "capacidad": 5}, headers=cabecera(solicitante)
     )
+
+    assert respuesta.status_code == 403
+
+
+def test_aprobador_crea_espacio_y_queda_asignado(client, crear_usuario):
+    aprobador = crear_usuario("coordinador-crea@reservas.test", Rol.APROBADOR)
+    cuerpo = {"nombre": f"Lab coordinador {uuid4().hex}", "tipo": "LABORATORIO", "capacidad": 15}
+
+    respuesta = client.post(f"{URL}/", json=cuerpo, headers=cabecera(aprobador))
+
+    assert respuesta.status_code == 201
+    with SessionLocal() as db:
+        asignado = db.scalar(
+            select(espacio_aprobador.c.usuario_id).where(espacio_aprobador.c.espacio_id == respuesta.json()["id"])
+        )
+    assert asignado == aprobador.id
+
+
+def test_aprobador_lista_solo_sus_espacios(client, crear_usuario):
+    aprobador = crear_usuario("coordinador-lista@reservas.test", Rol.APROBADOR)
+    propio = _crear_espacio("Propio")
+    _crear_espacio("Ajeno")
+    with SessionLocal() as db:
+        db.execute(espacio_aprobador.insert().values(espacio_id=propio.id, usuario_id=aprobador.id))
+        db.commit()
+
+    respuesta = client.get(f"{URL}/admin", headers=cabecera(aprobador))
+
+    assert respuesta.status_code == 200
+    assert [espacio["id"] for espacio in respuesta.json()] == [propio.id]
+
+
+def test_aprobador_edita_y_desactiva_sus_espacios(client, crear_usuario):
+    aprobador = crear_usuario("coordinador-edita@reservas.test", Rol.APROBADOR)
+    propio = _crear_espacio("Propio editable")
+    with SessionLocal() as db:
+        db.execute(espacio_aprobador.insert().values(espacio_id=propio.id, usuario_id=aprobador.id))
+        db.commit()
+
+    editar = client.patch(f"{URL}/{propio.id}", json={"capacidad": 30}, headers=cabecera(aprobador))
+    desactivar = client.patch(f"{URL}/{propio.id}/estado", json={"activo": False}, headers=cabecera(aprobador))
+
+    assert editar.status_code == 200
+    assert editar.json()["capacidad"] == 30
+    assert desactivar.status_code == 200
+    assert desactivar.json()["activo"] is False
+
+
+def test_aprobador_no_modifica_espacios_no_asignados(client, crear_usuario):
+    aprobador = crear_usuario("coordinador-ajeno@reservas.test", Rol.APROBADOR)
+    ajeno = _crear_espacio("Ajeno no editable")
+
+    editar = client.patch(f"{URL}/{ajeno.id}", json={"capacidad": 30}, headers=cabecera(aprobador))
+    desactivar = client.patch(f"{URL}/{ajeno.id}/estado", json={"activo": False}, headers=cabecera(aprobador))
+
+    assert editar.status_code == 404
+    assert desactivar.status_code == 404
+    with SessionLocal() as db:
+        espacio = db.get(Espacio, ajeno.id)
+        assert espacio.capacidad == 20
+        assert espacio.activo is True
+
+
+def test_solicitante_no_modifica_espacios(client, solicitante):
+    espacio = _crear_espacio("Sin permiso")
+
+    respuesta = client.patch(f"{URL}/{espacio.id}", json={"capacidad": 30}, headers=cabecera(solicitante))
 
     assert respuesta.status_code == 403

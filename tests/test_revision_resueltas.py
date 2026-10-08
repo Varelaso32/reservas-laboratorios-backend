@@ -122,20 +122,41 @@ def test_admin_consulta_historial_de_cualquier_espacio(client, admin, solicitant
     assert [solicitud["id"] for solicitud in respuesta.json()] == [ids[1], ids[0]]
 
 
-def test_admin_no_puede_aprobar_ni_rechazar(client, admin, solicitante, crear_usuario):
-    aprobador = crear_usuario("aprobador-admin-no@reservas.test", Rol.APROBADOR)
+def test_admin_aprueba_solicitud_de_cualquier_espacio(client, admin, solicitante, crear_usuario):
+    aprobador = crear_usuario("aprobador-admin-aprueba@reservas.test", Rol.APROBADOR)
     espacio_id = _crear_espacio_aprobador(aprobador.id)
     pendiente = _crear_historial(espacio_id, aprobador.id, solicitante.id)[2]
 
-    aprobar = client.post(f"/api/v1/solicitudes/{pendiente}/aprobar", headers=cabecera(admin))
-    rechazar = client.post(
+    respuesta = client.post(f"/api/v1/solicitudes/{pendiente}/aprobar", headers=cabecera(admin))
+
+    assert respuesta.status_code == 200
+    assert respuesta.json()["solicitud"]["decidido_por"] == admin.nombre
+
+
+def test_admin_rechaza_solicitud_de_cualquier_espacio(client, admin, solicitante, crear_usuario):
+    aprobador = crear_usuario("aprobador-admin-rechaza@reservas.test", Rol.APROBADOR)
+    espacio_id = _crear_espacio_aprobador(aprobador.id)
+    pendiente = _crear_historial(espacio_id, aprobador.id, solicitante.id)[2]
+
+    respuesta = client.post(
         f"/api/v1/solicitudes/{pendiente}/rechazar",
-        json={"motivo": "Prueba"},
+        json={"motivo": "Mantenimiento programado"},
         headers=cabecera(admin),
     )
 
-    assert aprobar.status_code == 403
-    assert rechazar.status_code == 403
+    assert respuesta.status_code == 200
+    assert respuesta.json()["solicitud"]["estado"] == "RECHAZADA"
+
+
+def test_aprobador_no_decide_en_espacio_no_asignado(client, solicitante, crear_usuario):
+    dueno = crear_usuario("aprobador-dueno@reservas.test", Rol.APROBADOR)
+    otro = crear_usuario("aprobador-ajeno@reservas.test", Rol.APROBADOR)
+    espacio_id = _crear_espacio_aprobador(dueno.id)
+    pendiente = _crear_historial(espacio_id, dueno.id, solicitante.id)[2]
+
+    respuesta = client.post(f"/api/v1/solicitudes/{pendiente}/aprobar", headers=cabecera(otro))
+
+    assert respuesta.status_code == 404
 
 
 def test_solicitante_no_puede_consultar_historial_resuelto(client, solicitante):

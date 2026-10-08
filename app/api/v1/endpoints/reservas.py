@@ -1,4 +1,6 @@
-"""Tarea: SCRUM-86 consultar reservas activas por usuario (HU-14)."""
+"""Tarea: SCRUM-86 consultar reservas activas por usuario (HU-14) y agenda general."""
+from datetime import date, datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -6,13 +8,61 @@ from app.api.deps import get_usuario_actual, requiere_rol
 from app.core.database import get_db
 from app.models.enums import Rol
 from app.models.modelos import Usuario
-from app.schemas.reserva import ReservaDetalleOut, ReservaResumenOut
+from app.schemas.reserva import ReservaAgendaOut, ReservaDetalleOut, ReservaResumenOut
 from app.services import reservas
+from app.utils.fechas import ZONA_COLOMBIA
 
 router = APIRouter()
 
 # IMPORTANTE: /mias va antes de /{reserva_id}. Si se invierte el orden,
 # FastAPI intenta leer "mias" como un id y responde 422.
+
+MAX_DIAS_AGENDA = 62
+
+
+@router.get(
+    "/",
+    response_model=list[ReservaAgendaOut],
+    summary="Agenda de reservas (dashboard y calendario)",
+    description=(
+        "Devuelve las reservas ACTIVAS que se cruzan con un día o con un rango de días, "
+        "ordenadas por hora de inicio. El ADMIN ve todas; el APROBADOR solo las de los espacios "
+        "que tiene asignados.\n\n"
+        "- `fecha`: un solo día (agenda de hoy).\n"
+        "- `fecha_inicio` y `fecha_fin`: un rango inclusivo (semana del calendario), "
+        f"de máximo {MAX_DIAS_AGENDA} días.\n"
+        "- Sin parámetros de fecha: el día de hoy, hora de Colombia.\n\n"
+        "No se puede enviar `fecha` junto con el rango."
+    ),
+    response_description="Reservas activas del periodo",
+    responses={
+        401: {"description": "No autenticado"},
+        403: {"description": "Solo para usuarios ADMIN o APROBADOR"},
+        422: {"description": "Combinación de fechas inválida o rango demasiado largo"},
+    },
+)
+def agenda_reservas(
+    fecha: date | None = Query(None, description="Un solo día (AAAA-MM-DD)"),
+    fecha_inicio: date | None = Query(None, description="Inicio del rango, inclusivo (AAAA-MM-DD)"),
+    fecha_fin: date | None = Query(None, description="Fin del rango, inclusivo (AAAA-MM-DD)"),
+    espacio_id: int | None = Query(None, gt=0, description="Filtrar por un espacio"),
+    usuario: Usuario = Depends(requiere_rol(Rol.ADMIN, Rol.APROBADOR)),
+    db: Session = Depends(get_db),
+):
+    hay_rango = fecha_inicio is not None or fecha_fin is not None
+    if fecha is not None and hay_rango:
+        raise HTTPException(status_code=422, detail="Envía fecha o el rango fecha_inicio/fecha_fin, no ambos")
+    if hay_rango:
+        if fecha_inicio is None or fecha_fin is None:
+            raise HTTPException(status_code=422, detail="El rango necesita fecha_inicio y fecha_fin")
+        if fecha_inicio > fecha_fin:
+            raise HTTPException(status_code=422, detail="fecha_inicio no puede ser posterior a fecha_fin")
+        if fecha_fin - fecha_inicio >= timedelta(days=MAX_DIAS_AGENDA):
+            raise HTTPException(status_code=422, detail=f"El rango no puede superar {MAX_DIAS_AGENDA} días")
+        desde, hasta = fecha_inicio, fecha_fin
+    else:
+        desde = hasta = fecha or datetime.now(ZONA_COLOMBIA).date()
+    return reservas.listar_agenda(db, usuario, desde, hasta, espacio_id)
 
 
 @router.get(
