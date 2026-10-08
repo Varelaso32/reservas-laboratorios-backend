@@ -1,0 +1,47 @@
+name: Jira → Telegram
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jira-telegram
+  cancel-in-progress: false
+
+jobs:
+  notificar:
+    name: Notificar cambios de Jira
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restaurar estado de notificaciones
+        uses: actions/cache/restore@v4
+        with:
+          path: .jira-notif-state.json
+          key: jira-notif-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            jira-notif-
+
+      - name: Consultar Jira y enviar mensajes
+        env:
+          JIRA_URL: https://grupo-2-ecci.atlassian.net
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python3 .github/scripts/jira_notify.py
+
+      - name: Guardar estado de notificaciones
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: .jira-notif-state.json
+          key: jira-notif-${{ github.run_id }}-${{ github.run_attempt }}
