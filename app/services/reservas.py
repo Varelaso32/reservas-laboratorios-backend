@@ -1,5 +1,5 @@
 """Consulta de reservas (HU-14)."""
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased
@@ -83,6 +83,46 @@ def cancelar(db: Session, usuario: Usuario, reserva_id: int) -> dict:
     )
     db.commit()
     return _resumen(reserva, espacio)
+
+
+def listar_agenda(
+    db: Session,
+    usuario: Usuario,
+    desde: date,
+    hasta: date,
+    espacio_id: int | None = None,
+) -> list[dict]:
+    """Reservas ACTIVAS que se cruzan con los días [desde, hasta], hora de Colombia.
+
+    El ADMIN ve todas; el APROBADOR solo las de los espacios que tiene asignados.
+    """
+    inicio = datetime.combine(desde, time.min, ZONA_COLOMBIA)
+    fin = datetime.combine(hasta + timedelta(days=1), time.min, ZONA_COLOMBIA)
+    consulta = (
+        select(Reserva, Espacio, Solicitud, Titular.nombre)
+        .join(Espacio, Espacio.id == Reserva.espacio_id)
+        .join(Solicitud, Solicitud.id == Reserva.solicitud_id)
+        .join(Titular, Titular.id == Reserva.usuario_id)
+        .where(
+            Reserva.estado == EstadoReserva.ACTIVA,
+            Reserva.inicio < fin,
+            Reserva.fin > inicio,
+        )
+    )
+    if usuario.rol != Rol.ADMIN:
+        consulta = consulta.where(gestiona_espacio(Reserva.espacio_id, usuario.id))
+    if espacio_id is not None:
+        consulta = consulta.where(Reserva.espacio_id == espacio_id)
+
+    filas = db.execute(consulta.order_by(Reserva.inicio, Reserva.espacio_id, Reserva.id)).all()
+    salida = []
+    for reserva, espacio, solicitud, titular in filas:
+        item = _resumen(reserva, espacio)
+        item.update(
+            {"titular": titular, "proposito": solicitud.proposito, "asistentes": solicitud.asistentes}
+        )
+        salida.append(item)
+    return salida
 
 
 def listar_activas(db: Session, usuario: Usuario, incluir_canceladas: bool = False) -> list[dict]:

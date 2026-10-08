@@ -241,20 +241,21 @@ Resumen:
 | POST | `/auth/login` | Público | 7.2 |
 | GET | `/auth/me` | Cualquiera con sesión | 7.3 |
 | GET | `/espacios/` | Público | 7.4 |
-| POST | `/espacios/` | ADMIN | 7.4D |
-| GET | `/espacios/admin` | ADMIN | 7.4A |
-| PATCH | `/espacios/{espacio_id}` | ADMIN | 7.4B |
-| PATCH | `/espacios/{espacio_id}/estado` | ADMIN | 7.4C |
+| POST | `/espacios/` | ADMIN o APROBADOR | 7.4D |
+| GET | `/espacios/admin` | ADMIN o APROBADOR | 7.4A |
+| PATCH | `/espacios/{espacio_id}` | ADMIN o APROBADOR | 7.4B |
+| PATCH | `/espacios/{espacio_id}/estado` | ADMIN o APROBADOR | 7.4C |
 | GET | `/espacios/disponibles` | Público | 7.5 |
 | GET | `/espacios/{espacio_id}/disponibilidad` | Público | 7.6 |
-| GET | `/espacios/metricas` | ADMIN | 7.6A |
+| GET | `/espacios/metricas` | ADMIN o APROBADOR | 7.6A |
 | POST | `/solicitudes/` | SOLICITANTE | 7.7 |
 | GET | `/solicitudes/mias` | SOLICITANTE | 7.8 |
 | GET | `/solicitudes/pendientes` | APROBADOR o ADMIN | 7.9 |
 | GET | `/solicitudes/resueltas` | APROBADOR o ADMIN | 7.9A |
 | GET | `/solicitudes/{solicitud_id}` | Según el rol | 7.10 |
-| POST | `/solicitudes/{solicitud_id}/aprobar` | APROBADOR | 7.11 |
-| POST | `/solicitudes/{solicitud_id}/rechazar` | APROBADOR | 7.12 |
+| POST | `/solicitudes/{solicitud_id}/aprobar` | APROBADOR o ADMIN | 7.11 |
+| POST | `/solicitudes/{solicitud_id}/rechazar` | APROBADOR o ADMIN | 7.12 |
+| GET | `/reservas/` | ADMIN o APROBADOR | 7.13B |
 | GET | `/reservas/mias` | SOLICITANTE | 7.13 |
 | POST | `/reservas/{reserva_id}/cancelar` | SOLICITANTE | 7.13A |
 | GET | `/reservas/{reserva_id}` | Según el rol | 7.14 |
@@ -402,7 +403,8 @@ Respuesta 200:
 
 ### 7.4A GET /espacios/admin — Listar espacios para administración
 
-Rol **ADMIN**. Devuelve espacios activos e inactivos, ordenados por tipo y nombre.
+Roles **ADMIN** y **APROBADOR**. Devuelve espacios activos e inactivos, ordenados por tipo y nombre.
+El ADMIN ve todos; el APROBADOR solo los que tiene asignados.
 
 ```js
 const espaciosAdmin = await api("GET", "/espacios/admin");
@@ -419,7 +421,8 @@ Cada espacio incluye `id`, `nombre`, `tipo`, `capacidad`, `ubicacion` y `activo`
 
 ### 7.4D POST /espacios/ — Crear un espacio
 
-Rol **ADMIN**. Cuerpo JSON:
+Roles **ADMIN** y **APROBADOR**. Si lo crea un APROBADOR, queda asignado como su
+aprobador (así le aparece en su tabla y en sus métricas). Cuerpo JSON:
 
 | Campo | Requerido | Reglas |
 |---|---|---|
@@ -447,7 +450,8 @@ Respuesta **201**: el espacio con su `id` y `activo: true`, igual que en `/espac
 
 ### 7.4B PATCH /espacios/{espacio_id} — Editar un espacio
 
-Rol **ADMIN**. Actualiza solo los campos enviados: `nombre`, `tipo`, `capacidad` y `ubicacion`.
+Roles **ADMIN** (cualquier espacio) y **APROBADOR** (solo los asignados; otro espacio da 404).
+Actualiza solo los campos enviados: `nombre`, `tipo`, `capacidad` y `ubicacion`.
 Se permite enviar `ubicacion: null` para quitarla. El cuerpo no puede estar vacío.
 
 ```json
@@ -470,7 +474,8 @@ nueva.
 
 ### 7.4C PATCH /espacios/{espacio_id}/estado — Activar o desactivar
 
-Rol **ADMIN**. Cuerpo: `{"activo": false}` para desactivar o `{"activo": true}` para reactivar.
+Roles **ADMIN** (cualquier espacio) y **APROBADOR** (solo los asignados; otro espacio da 404).
+Cuerpo: `{"activo": false}` para desactivar o `{"activo": true}` para reactivar.
 La desactivación conserva las reservas futuras aprobadas y el historial, pero bloquea nuevas
 solicitudes y aprobaciones. No se borra físicamente el espacio porque hay referencias desde
 solicitudes y reservas.
@@ -560,8 +565,9 @@ Respuesta 200 (siempre 200, esté libre o no):
 
 ### 7.6A GET /espacios/metricas — Métricas de ocupación por espacio
 
-Rol **ADMIN**. Devuelve las métricas de todos los espacios (activos e inactivos) para la fecha
-consultada, evitando una petición por cada espacio.
+Roles **ADMIN** y **APROBADOR**. Devuelve las métricas de los espacios (activos e inactivos)
+para la fecha consultada, evitando una petición por cada espacio. El ADMIN ve todos; el
+APROBADOR solo los que tiene asignados.
 
 | Parámetro (query) | Requerido | Formato |
 |---|---|---|
@@ -864,7 +870,7 @@ Respuesta 200 (los campos de la bandeja más estos):
 
 ### 7.11 POST /solicitudes/{solicitud_id}/aprobar — Aprobar
 
-Rol **APROBADOR**, solo en espacios que administra. **No lleva cuerpo.** En una sola
+Rol **APROBADOR** en los espacios que administra, o **ADMIN** en cualquier espacio. **No lleva cuerpo.** En una sola
 operación aprueba la solicitud y crea la reserva ACTIVA a nombre del solicitante.
 
 ```bash
@@ -912,7 +918,7 @@ una pasa y la otra recibe 409. Al recibir 409, refresca la bandeja.
 
 ### 7.12 POST /solicitudes/{solicitud_id}/rechazar — Rechazar con motivo
 
-Rol **APROBADOR**, solo en espacios que administra. El motivo es obligatorio. Se
+Rol **APROBADOR** en los espacios que administra, o **ADMIN** en cualquier espacio. El motivo es obligatorio. Se
 puede rechazar aunque la solicitud esté vencida. Un rechazo nunca crea reserva.
 
 | Campo (JSON) | Requerido | Reglas |
@@ -944,6 +950,29 @@ Respuesta 200:
 | 401, 403, 404 | Igual que en aprobar |
 | 409 | La solicitud ya no está pendiente |
 | 422 | Falta `motivo` o está vacío |
+
+---
+
+### 7.13B GET /reservas/ — Agenda general (dashboard y calendario)
+
+Roles **ADMIN** (todas las reservas) y **APROBADOR** (las de sus espacios). Devuelve las reservas
+ACTIVAS que se cruzan con un día o un rango, ordenadas por hora de inicio.
+
+| Parámetro (query) | Uso |
+|---|---|
+| `fecha` | Agenda de un día |
+| `fecha_inicio` + `fecha_fin` | Semana del calendario (rango inclusivo, máximo 62 días) |
+| `espacio_id` | Opcional, filtra por un espacio |
+
+Sin fechas devuelve el día de hoy. `fecha` y el rango no se pueden combinar (422).
+
+```js
+const hoy = await api("GET", "/reservas/?fecha=2026-10-08");
+const semana = await api("GET", "/reservas/?fecha_inicio=2026-10-05&fecha_fin=2026-10-11");
+```
+
+Cada reserva trae `id`, `estado`, `espacio`, `inicio`, `fin`, `solicitud_id`, `titular`,
+`proposito` y `asistentes`.
 
 ---
 

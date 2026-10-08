@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.core.database import SessionLocal
 from app.models.enums import AccionTrazabilidad, EstadoReserva, EstadoSolicitud, Rol, TipoEspacio
-from app.models.modelos import Espacio, Reserva, Solicitud, Trazabilidad
+from app.models.modelos import Espacio, Reserva, Solicitud, Trazabilidad, espacio_aprobador
 from app.utils.fechas import ZONA_COLOMBIA
 from tests.conftest import cabecera
 
@@ -142,3 +142,67 @@ def test_mias_incluye_canceladas_solo_si_se_pide(client, solicitante):
         (activa_id, "ACTIVA"),
         (cancelada_id, "CANCELADA"),
     ]
+
+
+def _asignar(espacio_id: int, aprobador_id: int):
+    with SessionLocal() as db:
+        db.execute(espacio_aprobador.insert().values(espacio_id=espacio_id, usuario_id=aprobador_id))
+        db.commit()
+
+
+def _espacio_de(reserva_id: int) -> int:
+    with SessionLocal() as db:
+        return db.get(Reserva, reserva_id).espacio_id
+
+
+def test_agenda_admin_ve_reservas_del_dia_de_todos(client, admin, solicitante):
+    manana = (datetime.now(ZONA_COLOMBIA) + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+    primera, _ = _crear_reserva(solicitante, manana)
+    segunda, _ = _crear_reserva(solicitante, manana + timedelta(hours=2))
+    otro_dia, _ = _crear_reserva(solicitante, manana + timedelta(days=3))
+    cancelada, _ = _crear_reserva(solicitante, manana + timedelta(hours=4))
+    client.post(f"{URL}/{cancelada}/cancelar", headers=cabecera(solicitante))
+
+    respuesta = client.get(f"{URL}/?fecha={manana.date().isoformat()}", headers=cabecera(admin))
+
+    assert respuesta.status_code == 200
+    reservas = respuesta.json()
+    assert [r["id"] for r in reservas] == [primera, segunda]
+    assert reservas[0]["titular"] == solicitante.nombre
+    assert reservas[0]["proposito"] == "Prueba"
+
+
+def test_agenda_por_rango_para_el_calendario(client, admin, solicitante):
+    lunes = (datetime.now(ZONA_COLOMBIA) + timedelta(days=7)).replace(hour=10, minute=0, second=0, microsecond=0)
+    dentro, _ = _crear_reserva(solicitante, lunes + timedelta(days=2))
+    _crear_reserva(solicitante, lunes + timedelta(days=9))
+    desde = lunes.date().isoformat()
+    hasta = (lunes + timedelta(days=6)).date().isoformat()
+
+    respuesta = client.get(f"{URL}/?fecha_inicio={desde}&fecha_fin={hasta}", headers=cabecera(admin))
+
+    assert [r["id"] for r in respuesta.json()] == [dentro]
+
+
+def test_agenda_aprobador_ve_solo_sus_espacios(client, solicitante, crear_usuario):
+    aprobador = crear_usuario("coordinador-agenda@reservas.test", Rol.APROBADOR)
+    manana = (datetime.now(ZONA_COLOMBIA) + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+    propia, _ = _crear_reserva(solicitante, manana)
+    _crear_reserva(solicitante, manana)
+    _asignar(_espacio_de(propia), aprobador.id)
+
+    respuesta = client.get(f"{URL}/?fecha={manana.date().isoformat()}", headers=cabecera(aprobador))
+
+    assert [r["id"] for r in respuesta.json()] == [propia]
+
+
+def test_agenda_valida_parametros_y_rol(client, admin, solicitante):
+    def consultar(parametros, usuario=admin):
+        return client.get(f"{URL}/?{parametros}", headers=cabecera(usuario)).status_code
+
+    assert consultar("") == 200
+    assert consultar("fecha=2026-10-08&fecha_inicio=2026-10-08&fecha_fin=2026-10-09") == 422
+    assert consultar("fecha_inicio=2026-10-08") == 422
+    assert consultar("fecha_inicio=2026-10-09&fecha_fin=2026-10-08") == 422
+    assert consultar("fecha_inicio=2026-01-01&fecha_fin=2026-12-31") == 422
+    assert consultar("fecha=2026-10-08", solicitante) == 403

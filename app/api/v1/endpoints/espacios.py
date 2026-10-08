@@ -36,41 +36,45 @@ def _ejecutar(db: Session, accion, *args):
     status_code=status.HTTP_201_CREATED,
     summary="Crear un espacio",
     description=(
-        "**HU-19.** Registra un laboratorio o sala. Solo para ADMIN. El espacio queda activo "
-        "y sin aprobadores asignados. El nombre debe ser único."
+        "**HU-19.** Registra un laboratorio o sala. Para ADMIN y APROBADOR. El espacio queda "
+        "activo. Si lo crea un APROBADOR, queda asignado como su aprobador; si lo crea un ADMIN, "
+        "queda sin aprobadores. El nombre debe ser único."
     ),
     response_description="Espacio creado, con su id",
     responses={
         401: {"description": "No autenticado"},
-        403: {"description": "Solo para usuarios ADMIN"},
+        403: {"description": "Solo para usuarios ADMIN o APROBADOR"},
         409: {"description": "Ya existe un espacio con ese nombre"},
         422: {"description": "Datos inválidos"},
     },
 )
 def crear_espacio(
     datos: EspacioCrear,
-    _admin: Usuario = Depends(requiere_rol(Rol.ADMIN)),
+    usuario: Usuario = Depends(requiere_rol(Rol.ADMIN, Rol.APROBADOR)),
     db: Session = Depends(get_db),
 ):
-    return _ejecutar(db, gestion_espacios.crear, datos)
+    return _ejecutar(db, gestion_espacios.crear, usuario, datos)
 
 
 @router.get(
     "/admin",
     response_model=list[EspacioAdminOut],
-    summary="Listar todos los espacios para administración",
-    description="Devuelve espacios activos e inactivos. Solo para usuarios ADMIN.",
-    response_description="Todos los espacios, ordenados por tipo y nombre",
+    summary="Listar espacios para administración",
+    description=(
+        "Devuelve espacios activos e inactivos. El ADMIN ve todos; el APROBADOR solo los que "
+        "tiene asignados."
+    ),
+    response_description="Espacios ordenados por tipo y nombre",
     responses={
         401: {"description": "No autenticado"},
-        403: {"description": "Solo para usuarios ADMIN"},
+        403: {"description": "Solo para usuarios ADMIN o APROBADOR"},
     },
 )
 def listar_espacios_admin(
-    _admin: Usuario = Depends(requiere_rol(Rol.ADMIN)),
+    usuario: Usuario = Depends(requiere_rol(Rol.ADMIN, Rol.APROBADOR)),
     db: Session = Depends(get_db),
 ):
-    return gestion_espacios.listar_admin(db)
+    return gestion_espacios.listar_admin(db, usuario)
 
 
 @router.patch(
@@ -78,15 +82,16 @@ def listar_espacios_admin(
     response_model=EspacioAdminOut,
     summary="Actualizar un espacio",
     description=(
-        "Actualiza parcialmente nombre, tipo, capacidad o ubicación. Solo para ADMIN. "
+        "Actualiza parcialmente nombre, tipo, capacidad o ubicación. El ADMIN puede editar "
+        "cualquier espacio; el APROBADOR solo los que tiene asignados. "
         "No se permite reducir la capacidad por debajo de los asistentes de una reserva futura "
         "ACTIVA. Los campos omitidos no cambian; `ubicacion: null` la quita."
     ),
     response_description="Espacio actualizado",
     responses={
         401: {"description": "No autenticado"},
-        403: {"description": "Solo para usuarios ADMIN"},
-        404: {"description": "El espacio no existe"},
+        403: {"description": "Solo para usuarios ADMIN o APROBADOR"},
+        404: {"description": "El espacio no existe o no lo tienes asignado"},
         409: {"description": "Nombre duplicado o capacidad incompatible con una reserva futura"},
         422: {"description": "Datos inválidos"},
     },
@@ -94,10 +99,10 @@ def listar_espacios_admin(
 def actualizar_espacio(
     espacio_id: int,
     datos: EspacioActualizar,
-    _admin: Usuario = Depends(requiere_rol(Rol.ADMIN)),
+    usuario: Usuario = Depends(requiere_rol(Rol.ADMIN, Rol.APROBADOR)),
     db: Session = Depends(get_db),
 ):
-    return _ejecutar(db, gestion_espacios.actualizar, espacio_id, datos)
+    return _ejecutar(db, gestion_espacios.actualizar, usuario, espacio_id, datos)
 
 
 @router.patch(
@@ -107,23 +112,23 @@ def actualizar_espacio(
     description=(
         "Cambia el campo `activo`. Al desactivar se conservan las reservas futuras ya aprobadas, "
         "pero no se permiten nuevas solicitudes ni aprobaciones. No elimina el espacio ni su historial. "
-        "Solo para ADMIN."
+        "El ADMIN puede cambiar cualquier espacio; el APROBADOR solo los que tiene asignados."
     ),
     response_description="Espacio con su nuevo estado",
     responses={
         401: {"description": "No autenticado"},
-        403: {"description": "Solo para usuarios ADMIN"},
-        404: {"description": "El espacio no existe"},
+        403: {"description": "Solo para usuarios ADMIN o APROBADOR"},
+        404: {"description": "El espacio no existe o no lo tienes asignado"},
         422: {"description": "Falta el campo activo o es inválido"},
     },
 )
 def cambiar_estado_espacio(
     espacio_id: int,
     datos: EspacioEstadoActualizar,
-    _admin: Usuario = Depends(requiere_rol(Rol.ADMIN)),
+    usuario: Usuario = Depends(requiere_rol(Rol.ADMIN, Rol.APROBADOR)),
     db: Session = Depends(get_db),
 ):
-    return _ejecutar(db, gestion_espacios.cambiar_estado, espacio_id, datos.activo)
+    return _ejecutar(db, gestion_espacios.cambiar_estado, usuario, espacio_id, datos.activo)
 
 
 @router.get(
@@ -131,8 +136,8 @@ def cambiar_estado_espacio(
     response_model=list[EspacioMetricaOut],
     summary="Métricas de reservas por espacio",
     description=(
-        "Devuelve en una sola consulta las métricas de todos los espacios para la fecha indicada. "
-        "Solo para ADMIN. Cuenta reservas ACTIVAS que se cruzan con la fecha; las canceladas no "
+        "Devuelve en una sola consulta las métricas de los espacios para la fecha indicada. "
+        "El ADMIN ve todos; el APROBADOR solo los que tiene asignados. Cuenta reservas ACTIVAS que se cruzan con la fecha; las canceladas no "
         "cuentan. Se reserva todos los días, solo de 07:00 a 22:00: cada espacio activo tiene "
         "900 minutos disponibles por día. Los espacios inactivos tienen 0 minutos disponibles "
         "y porcentaje null."
@@ -140,15 +145,15 @@ def cambiar_estado_espacio(
     response_description="Métricas por espacio para la fecha consultada",
     responses={
         401: {"description": "No autenticado"},
-        403: {"description": "Solo para usuarios ADMIN"},
+        403: {"description": "Solo para usuarios ADMIN o APROBADOR"},
     },
 )
 def metricas_por_espacio(
     fecha: date = Query(..., description="Fecha a consultar (AAAA-MM-DD)", examples=["2026-10-06"]),
-    _admin: Usuario = Depends(requiere_rol(Rol.ADMIN)),
+    usuario: Usuario = Depends(requiere_rol(Rol.ADMIN, Rol.APROBADOR)),
     db: Session = Depends(get_db),
 ):
-    return metricas_espacios.listar_por_fecha(db, fecha)
+    return metricas_espacios.listar_por_fecha(db, usuario, fecha)
 
 
 @router.get(
