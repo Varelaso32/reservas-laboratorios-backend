@@ -1,0 +1,72 @@
+name: PR → Telegram
+
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, closed]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  notificar:
+    name: Notificar PR en Telegram
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enviar mensaje a Telegram
+        shell: bash
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          ACTION: ${{ github.event.action }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TITLE: ${{ github.event.pull_request.title }}
+          AUTOR: ${{ github.event.pull_request.user.login }}
+          RAMA_BASE: ${{ github.event.pull_request.base.ref }}
+          RAMA_HEAD: ${{ github.event.pull_request.head.ref }}
+          URL_PR: ${{ github.event.pull_request.html_url }}
+          MERGED: ${{ github.event.pull_request.merged }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${TELEGRAM_BOT_TOKEN}" ] || [ -z "${TELEGRAM_CHAT_ID}" ]; then
+            echo "::error::Faltan los secrets TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID"
+            exit 1
+          fi
+
+          case "${ACTION}" in
+            opened)            ENCABEZADO="PR abierto (#${PR_NUMBER})" ;;
+            reopened)          ENCABEZADO="PR reabierto (#${PR_NUMBER})" ;;
+            ready_for_review)  ENCABEZADO="PR listo para revisar (#${PR_NUMBER})" ;;
+            closed)
+              if [ "${MERGED}" = "true" ]; then
+                ENCABEZADO="PR mergeado (#${PR_NUMBER})"
+              else
+                ENCABEZADO="PR cerrado (#${PR_NUMBER})"
+              fi ;;
+            *)                 ENCABEZADO="PR actualizado (#${PR_NUMBER}) - ${ACTION}" ;;
+          esac
+
+          if [ "${DRAFT}" = "true" ]; then
+            ENCABEZADO="${ENCABEZADO} (borrador)"
+          fi
+
+          MENSAJE=$(printf '%s\n%s\n%s\n%s\n%s\n%s' \
+            "${ENCABEZADO}" \
+            "Repo: ${REPO}" \
+            "Titulo: ${TITLE}" \
+            "Rama: ${RAMA_HEAD} -> ${RAMA_BASE}" \
+            "Autor: ${AUTOR}" \
+            "${URL_PR}")
+
+          jq -n --arg text "${MENSAJE}" \
+            '{text: $text, disable_web_page_preview: true}' > /tmp/telegram.json
+
+          RESPUESTA=$(curl -sS --max-time 30 \
+            -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/telegram.json)
+
+          echo "${RESPUESTA}"
+          echo "${RESPUESTA}" | jq -e '.ok == true' > /dev/null
