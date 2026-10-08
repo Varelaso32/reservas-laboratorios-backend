@@ -16,6 +16,18 @@ class Settings(BaseSettings):
 
     API_V1_STR: str = "/api/v1"
 
+    # Orígenes del front que pueden llamar a la API, separados por coma.
+    # En producción se agrega el dominio de Vercel con la variable CORS_ORIGINS.
+    CORS_ORIGINS: str = (
+        "http://localhost:5173,http://127.0.0.1:5173,"
+        "http://localhost:3000,http://127.0.0.1:3000,"
+        "http://localhost:4200,http://127.0.0.1:4200"
+    )
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [o.strip().rstrip("/") for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
 
 @lru_cache
 def get_settings() -> Settings:
