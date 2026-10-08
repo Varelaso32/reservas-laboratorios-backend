@@ -126,3 +126,19 @@ def test_solo_solicitante_puede_cancelar_reserva(client, crear_usuario):
     respuesta = client.post(f"{URL}/{reserva_id}/cancelar", headers=cabecera(aprobador))
 
     assert respuesta.status_code == 403
+
+
+def test_mias_incluye_canceladas_solo_si_se_pide(client, solicitante):
+    inicio = datetime.now(ZONA_COLOMBIA) + timedelta(hours=3)
+    activa_id, _ = _crear_reserva(solicitante, inicio)
+    cancelada_id, _ = _crear_reserva(solicitante, inicio + timedelta(days=1))
+    client.post(f"{URL}/{cancelada_id}/cancelar", headers=cabecera(solicitante))
+
+    por_defecto = client.get(f"{URL}/mias", headers=cabecera(solicitante))
+    con_canceladas = client.get(f"{URL}/mias?incluir_canceladas=true", headers=cabecera(solicitante))
+
+    assert [r["id"] for r in por_defecto.json()] == [activa_id]
+    assert [(r["id"], r["estado"]) for r in con_canceladas.json()] == [
+        (activa_id, "ACTIVA"),
+        (cancelada_id, "CANCELADA"),
+    ]

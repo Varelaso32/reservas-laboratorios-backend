@@ -24,16 +24,17 @@ router = APIRouter()
     summary="Solicitudes pendientes de mis espacios",
     description=(
         "**HU-08.** Devuelve las solicitudes en estado PENDIENTE de los espacios que administra "
-        "el aprobador que inició sesión. No muestra solicitudes de otros espacios.\n\n"
+        "el aprobador que inició sesión. No muestra solicitudes de otros espacios. El ADMIN ve "
+        "las de todos los espacios, solo en consulta (no puede aprobar ni rechazar).\n\n"
         "Cada solicitud trae solicitante, espacio, fecha y horario. Se ordenan por hora de inicio "
         "(las más próximas primero). El campo `vencida` indica que la hora de inicio ya pasó."
     ),
     response_description="Solicitudes pendientes",
-    responses={401: {"description": "No autenticado"}, 403: {"description": "Solo para usuarios APROBADOR"}},
+    responses={401: {"description": "No autenticado"}, 403: {"description": "Solo para usuarios APROBADOR o ADMIN"}},
 )
 def solicitudes_pendientes(
     espacio_id: int | None = Query(None, description="Filtrar por un espacio"),
-    usuario: Usuario = Depends(requiere_rol(Rol.APROBADOR)),
+    usuario: Usuario = Depends(requiere_rol(Rol.APROBADOR, Rol.ADMIN)),
     db: Session = Depends(get_db),
 ):
     return revision.listar_pendientes(db, usuario, espacio_id)

@@ -85,20 +85,21 @@ def cancelar(db: Session, usuario: Usuario, reserva_id: int) -> dict:
     return _resumen(reserva, espacio)
 
 
-def listar_activas(db: Session, usuario: Usuario) -> list[dict]:
-    """HU-14: reservas ACTIVAS del usuario que todavía no han terminado.
+def listar_activas(db: Session, usuario: Usuario, incluir_canceladas: bool = False) -> list[dict]:
+    """HU-14: reservas del usuario que todavía no han terminado.
 
-    Las canceladas no aparecen (criterio 5) y las que ya pasaron tampoco.
+    Por defecto solo las ACTIVAS (criterio 5). Con incluir_canceladas también
+    salen las CANCELADAS, para que el dashboard las muestre atenuadas.
+    Las que ya pasaron nunca aparecen.
     """
     ahora = datetime.now(ZONA_COLOMBIA)
+    filtros = [Reserva.usuario_id == usuario.id, Reserva.fin > ahora]
+    if not incluir_canceladas:
+        filtros.append(Reserva.estado == EstadoReserva.ACTIVA)
     filas = db.execute(
         select(Reserva, Espacio)
         .join(Espacio, Espacio.id == Reserva.espacio_id)
-        .where(
-            Reserva.usuario_id == usuario.id,
-            Reserva.estado == EstadoReserva.ACTIVA,
-            Reserva.fin > ahora,
-        )
+        .where(*filtros)
         .order_by(Reserva.inicio, Reserva.id)
     ).all()
     return [_resumen(r, e) for r, e in filas]

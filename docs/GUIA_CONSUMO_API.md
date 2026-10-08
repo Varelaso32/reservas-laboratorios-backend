@@ -241,6 +241,7 @@ Resumen:
 | POST | `/auth/login` | Público | 7.2 |
 | GET | `/auth/me` | Cualquiera con sesión | 7.3 |
 | GET | `/espacios/` | Público | 7.4 |
+| POST | `/espacios/` | ADMIN | 7.4D |
 | GET | `/espacios/admin` | ADMIN | 7.4A |
 | PATCH | `/espacios/{espacio_id}` | ADMIN | 7.4B |
 | PATCH | `/espacios/{espacio_id}/estado` | ADMIN | 7.4C |
@@ -249,7 +250,7 @@ Resumen:
 | GET | `/espacios/metricas` | ADMIN | 7.6A |
 | POST | `/solicitudes/` | SOLICITANTE | 7.7 |
 | GET | `/solicitudes/mias` | SOLICITANTE | 7.8 |
-| GET | `/solicitudes/pendientes` | APROBADOR | 7.9 |
+| GET | `/solicitudes/pendientes` | APROBADOR o ADMIN | 7.9 |
 | GET | `/solicitudes/resueltas` | APROBADOR o ADMIN | 7.9A |
 | GET | `/solicitudes/{solicitud_id}` | Según el rol | 7.10 |
 | POST | `/solicitudes/{solicitud_id}/aprobar` | APROBADOR | 7.11 |
@@ -413,6 +414,34 @@ Cada espacio incluye `id`, `nombre`, `tipo`, `capacidad`, `ubicacion` y `activo`
 |---|---|
 | 401 | Sin token |
 | 403 | El usuario no es ADMIN |
+
+---
+
+### 7.4D POST /espacios/ — Crear un espacio
+
+Rol **ADMIN**. Cuerpo JSON:
+
+| Campo | Requerido | Reglas |
+|---|---|---|
+| `nombre` | Sí | Único, hasta 120 caracteres; no puede ser solo espacios |
+| `tipo` | Sí | `LABORATORIO` o `SALA` |
+| `capacidad` | Sí | Entero mayor que 0 |
+| `ubicacion` | No | Hasta 200 caracteres |
+
+```js
+const espacio = await api("POST", "/espacios/", {
+  nombre: "Laboratorio de Redes", tipo: "LABORATORIO", capacidad: 25, ubicacion: "Bloque A, piso 2",
+});
+```
+
+Respuesta **201**: el espacio con su `id` y `activo: true`, igual que en `/espacios/admin`.
+
+| Código | Cuándo |
+|---|---|
+| 401 | Sin token |
+| 403 | El usuario no es ADMIN |
+| 409 | Ya existe un espacio con ese nombre |
+| 422 | Datos inválidos o campos no permitidos |
 
 ---
 
@@ -701,8 +730,9 @@ Respuesta 200: una lista con el mismo formato de la respuesta de 7.7, sin el cam
 
 ### 7.9 GET /solicitudes/pendientes — Bandeja del aprobador
 
-Rol **APROBADOR**. Devuelve las solicitudes PENDIENTE de los espacios que administra,
-ordenadas por hora de inicio (las más próximas primero).
+Roles **APROBADOR** y **ADMIN**. El APROBADOR ve las solicitudes PENDIENTE de los espacios
+que administra; el ADMIN las de todos los espacios, solo en consulta (no puede aprobar ni
+rechazar). Se ordenan por hora de inicio (las más próximas primero).
 
 | Parámetro (query) | Requerido | Descripción |
 |---|---|---|
@@ -920,8 +950,10 @@ Respuesta 200:
 ### 7.13 GET /reservas/mias — Mis reservas activas
 
 Rol **SOLICITANTE**. Devuelve las reservas ACTIVAS del usuario que todavía no han
-terminado, ordenadas por fecha y hora de inicio. No aparecen las canceladas ni las
-que ya pasaron.
+terminado, ordenadas por fecha y hora de inicio. Las que ya pasaron nunca aparecen.
+
+Con `?incluir_canceladas=true` también salen las CANCELADAS (con `estado: "CANCELADA"`),
+para mostrarlas atenuadas en el dashboard sin que desaparezcan al recargar.
 
 ```bash
 curl http://localhost:8000/api/v1/reservas/mias -H "Authorization: Bearer $TOKEN"

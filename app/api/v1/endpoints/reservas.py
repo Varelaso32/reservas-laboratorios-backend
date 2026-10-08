@@ -1,5 +1,5 @@
 """Tarea: SCRUM-86 consultar reservas activas por usuario (HU-14)."""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_usuario_actual, requiere_rol
@@ -23,17 +23,19 @@ router = APIRouter()
         "**HU-14.** Devuelve las reservas ACTIVAS del usuario que inició sesión que todavía no "
         "han terminado, ordenadas por fecha y hora de inicio. Cada una trae espacio, fecha, "
         "horario y estado.\n\n"
-        "No aparecen las reservas canceladas ni las que ya pasaron. Solo se ven las reservas "
+        "Por defecto no aparecen las reservas canceladas; con `incluir_canceladas=true` también "
+        "salen, con estado CANCELADA. Las que ya pasaron nunca aparecen. Solo se ven las reservas "
         "propias. Solo para usuarios SOLICITANTE."
     ),
     response_description="Reservas activas del usuario",
     responses={401: {"description": "No autenticado"}, 403: {"description": "Solo para usuarios SOLICITANTE"}},
 )
 def mis_reservas(
+    incluir_canceladas: bool = Query(False, description="true para incluir también las CANCELADAS"),
     usuario: Usuario = Depends(requiere_rol(Rol.SOLICITANTE)),
     db: Session = Depends(get_db),
 ):
-    return reservas.listar_activas(db, usuario)
+    return reservas.listar_activas(db, usuario, incluir_canceladas)
 
 
 @router.post(

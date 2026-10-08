@@ -142,3 +142,20 @@ def test_solicitante_no_puede_consultar_historial_resuelto(client, solicitante):
     respuesta = client.get(f"{URL}?espacio_id=1", headers=cabecera(solicitante))
 
     assert respuesta.status_code == 403
+
+
+def test_admin_consulta_pendientes_de_todos_los_espacios(client, admin, solicitante, crear_usuario):
+    aprobador = crear_usuario("aprobador-pendientes@reservas.test", Rol.APROBADOR)
+    espacio_id = _crear_espacio_aprobador(aprobador.id)
+    pendiente = _crear_historial(espacio_id, aprobador.id, solicitante.id)[2]
+
+    respuesta = client.get(f"/api/v1/solicitudes/pendientes?espacio_id={espacio_id}", headers=cabecera(admin))
+
+    assert respuesta.status_code == 200
+    assert [solicitud["id"] for solicitud in respuesta.json()] == [pendiente]
+
+
+def test_solicitante_no_consulta_pendientes(client, solicitante):
+    respuesta = client.get("/api/v1/solicitudes/pendientes", headers=cabecera(solicitante))
+
+    assert respuesta.status_code == 403
