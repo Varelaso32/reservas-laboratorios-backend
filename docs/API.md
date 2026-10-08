@@ -38,7 +38,7 @@ Cada paso queda en el historial: CREADA, APROBADA, RECHAZADA.
 | 1 | HU-01: listar espacios y consultar disponibilidad | GET /api/v1/espacios/, GET /api/v1/espacios/disponibles |
 | 2 | Login y roles con JWT | POST /api/v1/auth/login, GET /api/v1/auth/me |
 | 3 | HU-04 y HU-05 (SCRUM-73, SCRUM-75): crear solicitud, validar disponibilidad y mis solicitudes. Registro CREADA en el historial | POST /api/v1/solicitudes/, GET /api/v1/solicitudes/mias, GET /api/v1/espacios/{espacio_id}/disponibilidad |
-| 4 | HU-08 y HU-09 (SCRUM-77, SCRUM-79): pendientes del aprobador y detalle de una solicitud | GET /api/v1/solicitudes/pendientes, GET /api/v1/solicitudes/{solicitud_id} |
+| 4 | HU-08 y HU-09 (SCRUM-77, SCRUM-79): pendientes, historial resuelto por espacio y detalle | GET /api/v1/solicitudes/pendientes, GET /api/v1/solicitudes/resueltas, GET /api/v1/solicitudes/{solicitud_id} |
 | 5 | HU-10, HU-13 y HU-11 (SCRUM-81, SCRUM-85, SCRUM-83): aprobar con reserva automática y rechazar con motivo. Registros APROBADA y RECHAZADA en el historial | POST /api/v1/solicitudes/{solicitud_id}/aprobar, POST /api/v1/solicitudes/{solicitud_id}/rechazar |
 | 6 | HU-14 (SCRUM-86): reservas activas del usuario y detalle de una reserva | GET /api/v1/reservas/mias, GET /api/v1/reservas/{reserva_id} |
 | 7 | HU-24 (SCRUM-88): consulta del historial de una solicitud o de una reserva. Con esto se completan las 10 tareas de backend de la iteración | GET /api/v1/solicitudes/{solicitud_id}/historial, GET /api/v1/reservas/{reserva_id}/historial |
@@ -48,17 +48,25 @@ Cada paso queda en el historial: CREADA, APROBADA, RECHAZADA.
 | Método | Ruta | Resumen | Rol | HU | Fase |
 |---|---|---|---|---|---|
 | GET | /api/v1/espacios/ | Listar espacios activos | Público | HU-01 | 1 |
+| POST | /api/v1/espacios/ | Crear un espacio | ADMIN, APROBADOR (queda asignado) | HU-19 | — |
+| GET | /api/v1/espacios/admin | Listar espacios activos e inactivos | ADMIN (todos), APROBADOR (sus espacios) | — | — |
 | GET | /api/v1/espacios/disponibles | Consultar espacios disponibles | Público | HU-01 | 1 |
 | GET | /api/v1/espacios/{espacio_id}/disponibilidad | Validar disponibilidad de un espacio | Público | HU-05 | 3 |
+| GET | /api/v1/espacios/metricas | Métricas de reservas por espacio | ADMIN (todos), APROBADOR (sus espacios) | — | — |
+| PATCH | /api/v1/espacios/{espacio_id} | Editar un espacio | ADMIN (todos), APROBADOR (sus espacios) | — | — |
+| PATCH | /api/v1/espacios/{espacio_id}/estado | Activar o desactivar un espacio | ADMIN (todos), APROBADOR (sus espacios) | — | — |
 | POST | /api/v1/auth/login | Iniciar sesión | Público | Base | 2 |
 | GET | /api/v1/auth/me | Usuario actual | Cualquiera con sesión | Base | 2 |
 | POST | /api/v1/solicitudes/ | Crear solicitud de reserva | SOLICITANTE | HU-04, HU-05 | 3 |
 | GET | /api/v1/solicitudes/mias | Mis solicitudes | SOLICITANTE | HU-10.6, HU-11.7 | 3 |
-| GET | /api/v1/solicitudes/pendientes | Pendientes de mis espacios | APROBADOR | HU-08 | 4 |
+| GET | /api/v1/solicitudes/pendientes | Pendientes de mis espacios | APROBADOR (sus espacios), ADMIN (todos, solo consulta) | HU-08 | 4 |
+| GET | /api/v1/solicitudes/resueltas | Historial de solicitudes por espacio | APROBADOR (sus espacios), ADMIN (todos, solo consulta) | — | 4 |
 | GET | /api/v1/solicitudes/{solicitud_id} | Detalle de una solicitud | APROBADOR (sus espacios), SOLICITANTE (las suyas), ADMIN (todas) | HU-09 | 4 |
-| POST | /api/v1/solicitudes/{solicitud_id}/aprobar | Aprobar y generar la reserva | APROBADOR (sus espacios) | HU-10, HU-13 | 5 |
-| POST | /api/v1/solicitudes/{solicitud_id}/rechazar | Rechazar con motivo | APROBADOR (sus espacios) | HU-11 | 5 |
-| GET | /api/v1/reservas/mias | Mis reservas activas | SOLICITANTE | HU-14 | 6 |
+| POST | /api/v1/solicitudes/{solicitud_id}/aprobar | Aprobar y generar la reserva | APROBADOR (sus espacios), ADMIN (todos) | HU-10, HU-13 | 5 |
+| POST | /api/v1/solicitudes/{solicitud_id}/rechazar | Rechazar con motivo | APROBADOR (sus espacios), ADMIN (todos) | HU-11 | 5 |
+| GET | /api/v1/reservas/ | Agenda de reservas por día o rango | ADMIN (todas), APROBADOR (sus espacios) | — | 6 |
+| GET | /api/v1/reservas/mias | Mis reservas (opcional: también canceladas) | SOLICITANTE | HU-14 | 6 |
+| POST | /api/v1/reservas/{reserva_id}/cancelar | Cancelar una reserva propia | SOLICITANTE | — | 6 |
 | GET | /api/v1/reservas/{reserva_id} | Detalle de una reserva | SOLICITANTE (las suyas), APROBADOR (sus espacios), ADMIN (todas) | HU-14 | 6 |
 | GET | /api/v1/solicitudes/{solicitud_id}/historial | Historial de una solicitud | SOLICITANTE (las suyas), APROBADOR (sus espacios), ADMIN (todas) | HU-24 | 7 |
 | GET | /api/v1/reservas/{reserva_id}/historial | Historial de una reserva | SOLICITANTE (las suyas), APROBADOR (sus espacios), ADMIN (todas) | HU-24 | 7 |
@@ -107,6 +115,84 @@ Devuelve los laboratorios y salas activos. Los inactivos no aparecen.
 | tipo | LABORATORIO / SALA | No | Filtra por tipo. Sin él trae ambos |
 
 Respuesta 200: lista de espacios con id, nombre, tipo, capacidad y ubicacion.
+
+### GET /api/v1/espacios/metricas
+
+Devuelve en una sola petición las métricas de los espacios, incluidos los inactivos. El ADMIN
+ve todos; el APROBADOR solo los que tiene asignados. Requiere `fecha` en formato `AAAA-MM-DD`.
+
+- Cuenta las reservas ACTIVAS que se cruzan con esa fecha; las CANCELADAS se excluyen.
+- Se reserva todos los días, solo de 07:00 a 22:00, hora de Colombia (es la misma regla que
+  valida la creación de solicitudes). El tiempo que no se alcance a reservar queda libre.
+- Un espacio activo tiene 900 minutos disponibles por día. Un espacio inactivo tiene
+  0 minutos disponibles y `porcentaje_ocupacion: null`.
+- `porcentaje_ocupacion` es minutos reservados / minutos disponibles * 100.
+
+Respuesta 200:
+
+```json
+[
+  {
+    "id": 1,
+    "nombre": "Laboratorio de Redes",
+    "tipo": "LABORATORIO",
+    "capacidad": 25,
+    "ubicacion": "Bloque A, piso 2",
+    "activo": true,
+    "fecha": "2026-10-06",
+    "reservas_dia": 2,
+    "minutos_reservados": 90,
+    "minutos_disponibles": 900,
+    "porcentaje_ocupacion": 10
+  }
+]
+```
+
+### POST /api/v1/espacios/
+
+HU-19. Crea un laboratorio o sala. Roles ADMIN y APROBADOR. Si lo crea un APROBADOR, queda
+asignado como su aprobador; si lo crea un ADMIN, queda sin aprobadores. Se envía como JSON.
+
+| Campo | Tipo | Requerido | Descripción |
+|---|---|---|---|
+| nombre | texto (hasta 120) | Sí | Único. Se recorta y no puede quedar vacío |
+| tipo | LABORATORIO / SALA | Sí | Tipo de espacio |
+| capacidad | entero mayor que 0 | Sí | Número máximo de personas |
+| ubicacion | texto (hasta 200) | No | Bloque y piso |
+
+Respuesta 201: el espacio creado (id, nombre, tipo, capacidad, ubicacion, activo: true).
+Queda sin aprobadores asignados.
+
+| Código | Cuándo |
+|---|---|
+| 201 | Espacio creado |
+| 401 | No autenticado |
+| 403 | El usuario no es ADMIN |
+| 409 | Ya existe un espacio con ese nombre |
+| 422 | Datos inválidos o campos no permitidos |
+
+### GET /api/v1/espacios/admin
+
+Devuelve los espacios, activos e inactivos; es la lista para la pantalla de administración.
+El ADMIN ve todos; el APROBADOR solo los que tiene asignados.
+
+### PATCH /api/v1/espacios/{espacio_id}
+
+Actualiza parcialmente `nombre`, `tipo`, `capacidad` o `ubicacion`. El ADMIN edita cualquier
+espacio; el APROBADOR solo los que tiene asignados (si no, 404). Los campos
+omitidos no cambian; para borrar la ubicación se envía `null`. El nombre se recorta y no
+puede quedar vacío. Un nombre duplicado da 409.
+
+No se puede reducir la capacidad por debajo de los asistentes en una reserva futura ACTIVA
+(409). Las solicitudes pendientes permanecen, pero no se podrán aprobar si exceden la
+capacidad nueva.
+
+### PATCH /api/v1/espacios/{espacio_id}/estado
+
+Recibe `{"activo": false}` para desactivar o `{"activo": true}` para reactivar. ADMIN en cualquier espacio; APROBADOR solo en los asignados (si no, 404).
+Desactivar conserva el espacio, el historial y las reservas futuras ya aprobadas, pero evita
+nuevas solicitudes y aprobaciones. No hay borrado físico porque las solicitudes y reservas
+mantienen referencias al espacio.
 
 ### GET /api/v1/espacios/disponibles
 
@@ -170,7 +256,8 @@ Se envía como JSON.
 
 Validaciones, en este orden:
 1. El espacio existe y está activo (si no, 404).
-2. La hora de fin es mayor que la de inicio y el horario no está en el pasado (si no, 422).
+2. La hora de fin es mayor que la de inicio, el horario está entre las 07:00 y las 22:00
+   (cualquier día de la semana) y no está en el pasado (si no, 422).
 3. Los asistentes no superan la capacidad (si no, 422).
 4. El espacio no tiene una reserva activa que se cruce (si la tiene, 409 y no se registra nada).
 5. El mismo usuario no tiene otra solicitud PENDIENTE para ese espacio en un horario que se cruce (si la tiene, 409).
@@ -210,8 +297,9 @@ Solo rol SOLICITANTE. Muestra si fue aprobada y, si fue rechazada, el motivo.
 
 ### GET /api/v1/solicitudes/pendientes
 
-HU-08. Solicitudes PENDIENTE de los espacios que administra el aprobador. Solo rol
-APROBADOR. No muestra solicitudes de otros espacios.
+HU-08. Solicitudes PENDIENTE de los espacios que administra el aprobador. No muestra
+solicitudes de otros espacios. El ADMIN también puede consultarla y ve las de todos los
+espacios, solo en lectura: aprobar y rechazar siguen siendo exclusivos del APROBADOR.
 
 | Parámetro | Tipo | Requerido | Descripción |
 |---|---|---|---|
@@ -228,6 +316,30 @@ vencida = true: la hora de inicio ya pasó; solo se puede rechazar.
 | 200 | Lista de pendientes (puede ser vacía) |
 | 401 | No autenticado |
 | 403 | El usuario no es APROBADOR |
+
+### GET /api/v1/solicitudes/resueltas
+
+Lista las solicitudes APROBADAS y RECHAZADAS de un espacio (el APROBADOR solo los que
+administra; el ADMIN cualquiera, solo para consultar: no puede aprobar ni rechazar),
+con el nombre de quien decidió, la fecha de resolución y el motivo de rechazo. Las CANCELADAS
+y PENDIENTES no aparecen.
+
+| Parámetro | Tipo | Requerido | Descripción |
+|---|---|---|---|
+| espacio_id | entero positivo | Sí | Espacio a consultar |
+| estado | APROBADA / RECHAZADA | No | Filtra por estado |
+| fecha_desde | fecha (AAAA-MM-DD) | No | Fecha inicial de resolución, inclusiva |
+| fecha_hasta | fecha (AAAA-MM-DD) | No | Fecha final de resolución, inclusiva |
+
+El rango de fechas se interpreta en hora de Colombia. Si el aprobador no administra el espacio,
+la respuesta es `200 []`, igual que la lista de pendientes.
+
+| Código | Cuándo |
+|---|---|
+| 200 | Lista de solicitudes resueltas (puede ser vacía) |
+| 401 | No autenticado |
+| 403 | El usuario no es APROBADOR ni ADMIN |
+| 422 | Estado, espacio o fecha inválidos; fecha_desde posterior a fecha_hasta |
 
 ### GET /api/v1/solicitudes/{solicitud_id}
 
@@ -247,7 +359,7 @@ Quién puede verla: APROBADOR (sus espacios), SOLICITANTE (las suyas), ADMIN (to
 
 HU-10 y HU-13. Aprueba una solicitud PENDIENTE y en la misma operación genera la
 reserva ACTIVA a nombre del solicitante, con el mismo espacio, fecha y horario.
-Solo rol APROBADOR, y solo en espacios que administra. No lleva cuerpo.
+Rol APROBADOR solo en espacios que administra; rol ADMIN en cualquier espacio. No lleva cuerpo.
 
 Validaciones, en este orden:
 1. La solicitud existe y es de un espacio que administra (si no, 404).
@@ -255,6 +367,7 @@ Validaciones, en este orden:
 3. No está vencida (si su hora de inicio ya pasó, 409: solo se puede rechazar).
 4. El espacio sigue activo (si no, 409).
 5. El espacio sigue libre en ese horario (si otra solicitud ya se aprobó para ese horario, 409).
+6. Los asistentes siguen dentro de la capacidad actual del espacio (si la capacidad cambió, 409).
 
 Si dos aprobaciones del mismo horario llegan al mismo tiempo, solo una pasa; la
 otra recibe 409 y su solicitud queda PENDIENTE. Una solicitud nunca genera más
@@ -278,8 +391,8 @@ Queda en el historial la acción APROBADA, enlazada a la reserva.
 
 ### POST /api/v1/solicitudes/{solicitud_id}/rechazar
 
-HU-11. Rechaza una solicitud PENDIENTE. Solo rol APROBADOR, y solo en espacios que
-administra. El motivo es obligatorio. Un rechazo nunca genera reserva. Se puede
+HU-11. Rechaza una solicitud PENDIENTE. Rol APROBADOR solo en espacios que administra;
+rol ADMIN en cualquier espacio. El motivo es obligatorio. Un rechazo nunca genera reserva. Se puede
 rechazar aunque esté vencida.
 
 Cuerpo JSON:
@@ -307,13 +420,43 @@ Ejemplo de cuerpo: {"motivo": "El laboratorio está en mantenimiento esa semana"
 
 ## Reservas
 
+### GET /api/v1/reservas/
+
+Agenda general para el dashboard ("Agenda de hoy") y el calendario semanal. Devuelve las
+reservas ACTIVAS que se cruzan con un día o con un rango de días, ordenadas por hora de inicio.
+Roles ADMIN (todas las reservas) y APROBADOR (solo las de los espacios que tiene asignados).
+
+| Parámetro | Tipo | Requerido | Descripción |
+|---|---|---|---|
+| fecha | fecha (AAAA-MM-DD) | No | Un solo día |
+| fecha_inicio | fecha (AAAA-MM-DD) | No | Inicio del rango, inclusivo. Va con fecha_fin |
+| fecha_fin | fecha (AAAA-MM-DD) | No | Fin del rango, inclusivo. Máximo 62 días de rango |
+| espacio_id | entero positivo | No | Filtra por un espacio |
+
+Sin parámetros de fecha devuelve el día de hoy (hora de Colombia). No se puede enviar `fecha`
+junto con el rango.
+
+Cada elemento trae lo mismo que `/reservas/mias` (id, estado, espacio, inicio, fin,
+solicitud_id) más titular (nombre), proposito y asistentes.
+
+| Código | Cuándo |
+|---|---|
+| 200 | Lista de reservas (puede ser vacía) |
+| 401 | No autenticado |
+| 403 | El usuario no es ADMIN ni APROBADOR |
+| 422 | fecha junto con rango, rango incompleto o invertido, o más de 62 días |
+
 ### GET /api/v1/reservas/mias
 
-HU-14. Reservas ACTIVAS del usuario que inició sesión que todavía no han terminado,
+HU-14. Reservas del usuario que inició sesión que todavía no han terminado,
 ordenadas por fecha y hora de inicio. Solo rol SOLICITANTE. Solo se ven las propias.
 
+| Parámetro | Tipo | Requerido | Descripción |
+|---|---|---|---|
+| incluir_canceladas | booleano | No | `true` incluye también las CANCELADAS. Por defecto `false` |
+
 No aparecen:
-- Las reservas canceladas (criterio 5).
+- Las reservas canceladas (criterio 5), salvo con `incluir_canceladas=true`.
 - Las que ya terminaron (su hora de fin ya pasó).
 
 Cada elemento trae: id, estado, espacio (id, nombre, tipo, capacidad, ubicacion),
@@ -324,6 +467,20 @@ inicio, fin y solicitud_id.
 | 200 | Lista de reservas activas (puede ser vacía) |
 | 401 | No autenticado |
 | 403 | El usuario no es SOLICITANTE |
+
+### POST /api/v1/reservas/{reserva_id}/cancelar
+
+Solo rol SOLICITANTE y solo para una reserva propia que aún no haya iniciado. La reserva y
+la solicitud asociada cambian a CANCELADA, y se registra la acción en el historial. Si se
+repite la petición, devuelve la reserva CANCELADA sin duplicar el historial.
+
+| Código | Cuándo |
+|---|---|
+| 200 | Reserva cancelada o ya estaba cancelada |
+| 401 | No autenticado |
+| 403 | El usuario no es SOLICITANTE |
+| 404 | La reserva no existe o no pertenece al usuario |
+| 409 | La reserva ya inició |
 
 ### GET /api/v1/reservas/{reserva_id}
 
@@ -345,9 +502,8 @@ Quién puede verla: SOLICITANTE (las suyas), APROBADOR (las de sus espacios), AD
 ## Historial
 
 HU-24. Cada acción sobre una solicitud queda registrada: CREADA (fase 3),
-APROBADA y RECHAZADA (fase 5). La acción CANCELADA está preparada en el modelo y se
-usará cuando exista la historia de cancelación. El historial no se puede modificar
-ni borrar: la base de datos lo impide.
+APROBADA y RECHAZADA (fase 5), y CANCELADA al cancelar una reserva propia. El historial
+no se puede modificar ni borrar: la base de datos lo impide.
 
 Nota: la solicitud #1 la crea el script de datos de prueba directamente en la base,
 sin pasar por la API, así que su historial aparece vacío.
