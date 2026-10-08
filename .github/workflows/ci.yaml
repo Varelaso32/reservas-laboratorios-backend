@@ -6,10 +6,11 @@
 name: ci Backend
 
 on:
-  # push solo a develop: los pull_request ya cubren las ramas del proyecto,
-  # asi se evita la doble ejecucion (push + pull_request) sobre lo mismo.
+  # push a develop, qa y main: Sonar solo analiza una rama cuando la CI corre en
+  # ella, por eso las ramas de ambiente deben disparar el pipeline tambien.
+  # Los pull_request cubren las ramas de origen de los PRs.
   push:
-    branches: [ develop ]
+    branches: [ develop, qa, main ]
   pull_request:
     branches: [ main, develop, qa ]
 
