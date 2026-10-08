@@ -1,14 +1,20 @@
 from fastapi.testclient import TestClient
-from app.main import app  # Importa la instancia principal de FastAPI
+
+from app.main import app
 
 client = TestClient(app)
 
-def test_health_check():
-    """Prueba mínima para validar que la API responde."""
-    response = client.get("/")  # O el endpoint inicial/salud que tengan configurado
-    # Valida respuesta exitosa o al menos que no colapse el servidor
+
+def test_root_responde_200():
+    """El endpoint raiz responde con un mensaje de bienvenida."""
+    response = client.get("/")
     assert response.status_code == 200
 
-def test_placeholder():
-    """Asegura que pytest detecte una aserción válida."""
-    assert True
+
+def test_root_devuelve_mensaje_de_bienvenida():
+    """El cuerpo del endpoint raiz incluye el campo message con texto."""
+    response = client.get("/")
+    cuerpo = response.json()
+    assert "message" in cuerpo
+    assert isinstance(cuerpo["message"], str)
+    assert cuerpo["message"]
