@@ -14,7 +14,7 @@ router = APIRouter()
 
 _ERRORES = {
     401: {"description": "No autenticado"},
-    403: {"description": "Solo para usuarios APROBADOR"},
+    403: {"description": "Solo para usuarios APROBADOR o ADMIN"},
     404: {"description": "La solicitud no existe o no pertenece a un espacio que administras"},
     409: {"description": "La solicitud ya no está pendiente, está vencida, o el espacio ya fue reservado en ese horario"},
 }
@@ -31,7 +31,9 @@ _ERRORES = {
         "- Que la solicitud esté PENDIENTE (si ya se decidió, 409).\n"
         "- Que no esté vencida (si su hora de inicio ya pasó, 409; solo se puede rechazar).\n"
         "- Que el espacio siga activo y libre en ese horario (si otra solicitud ya se aprobó "
-        "para ese horario, 409).\n\n"
+        "para ese horario, 409).\n"
+        "- Que los asistentes no superen la capacidad actual del espacio (si la capacidad "
+        "cambió después de crear la solicitud, 409).\n\n"
         "Queda registrado quién aprobó y cuándo, y la acción APROBADA en el historial. "
         "Una solicitud nunca genera más de una reserva."
     ),
@@ -40,14 +42,14 @@ _ERRORES = {
 )
 def aprobar_solicitud(
     solicitud_id: int,
-    usuario: Usuario = Depends(requiere_rol(Rol.APROBADOR)),
+    usuario: Usuario = Depends(requiere_rol(Rol.APROBADOR, Rol.ADMIN)),
     db: Session = Depends(get_db),
 ):
     try:
         return decision.aprobar(db, usuario, solicitud_id)
     except decision.ErrorDecision as error:
         db.rollback()
-        raise HTTPException(status_code=error.codigo, detail=error.mensaje)
+        raise HTTPException(status_code=error.codigo, detail=error.mensaje) from error
 
 
 @router.post(
@@ -66,11 +68,11 @@ def aprobar_solicitud(
 def rechazar_solicitud(
     solicitud_id: int,
     datos: RechazoIn,
-    usuario: Usuario = Depends(requiere_rol(Rol.APROBADOR)),
+    usuario: Usuario = Depends(requiere_rol(Rol.APROBADOR, Rol.ADMIN)),
     db: Session = Depends(get_db),
 ):
     try:
         return decision.rechazar(db, usuario, solicitud_id, datos.motivo)
     except decision.ErrorDecision as error:
         db.rollback()
-        raise HTTPException(status_code=error.codigo, detail=error.mensaje)
+        raise HTTPException(status_code=error.codigo, detail=error.mensaje) from error

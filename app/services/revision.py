@@ -1,5 +1,5 @@
 """Revisión de solicitudes por el aprobador (HU-08, HU-09)."""
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import exists, select
 from sqlalchemy.orm import Session, aliased
@@ -49,21 +49,83 @@ def _salida(sol: Solicitud, esp: Espacio, solicitante: Usuario) -> dict:
     }
 
 
-def listar_pendientes(db: Session, aprobador: Usuario, espacio_id: int | None = None) -> list[dict]:
+def listar_pendientes(db: Session, usuario: Usuario, espacio_id: int | None = None) -> list[dict]:
+    """El APROBADOR ve las de sus espacios; el ADMIN las de todos, solo para consulta."""
     consulta = (
         select(Solicitud, Espacio, Solicitante)
         .join(Espacio, Espacio.id == Solicitud.espacio_id)
         .join(Solicitante, Solicitante.id == Solicitud.solicitante_id)
-        .where(
-            Solicitud.estado == EstadoSolicitud.PENDIENTE,
-            gestiona_espacio(Solicitud.espacio_id, aprobador.id),
-        )
+        .where(Solicitud.estado == EstadoSolicitud.PENDIENTE)
     )
+    if usuario.rol != Rol.ADMIN:
+        consulta = consulta.where(gestiona_espacio(Solicitud.espacio_id, usuario.id))
     if espacio_id is not None:
         consulta = consulta.where(Solicitud.espacio_id == espacio_id)
     # Primero las que se usan más pronto: son las más urgentes de decidir
     filas = db.execute(consulta.order_by(Solicitud.inicio, Solicitud.id)).all()
     return [_salida(s, e, u) for s, e, u in filas]
+
+
+def listar_resueltas(
+    db: Session,
+    usuario: Usuario,
+    espacio_id: int,
+    estado: EstadoSolicitud | None = None,
+    fecha_desde: date | None = None,
+    fecha_hasta: date | None = None,
+) -> list[dict]:
+    """Lista decisiones aprobadas o rechazadas de un espacio.
+
+    El APROBADOR solo ve los espacios que tiene asignados; el ADMIN ve cualquiera.
+    """
+    consulta = (
+        select(Solicitud, Espacio, Solicitante, Decisor.nombre)
+        .join(Espacio, Espacio.id == Solicitud.espacio_id)
+        .join(Solicitante, Solicitante.id == Solicitud.solicitante_id)
+        .join(Decisor, Decisor.id == Solicitud.decidido_por)
+        .where(
+            Solicitud.espacio_id == espacio_id,
+            Solicitud.estado.in_((EstadoSolicitud.APROBADA, EstadoSolicitud.RECHAZADA)),
+        )
+    )
+    if usuario.rol != Rol.ADMIN:
+        consulta = consulta.where(gestiona_espacio(Solicitud.espacio_id, usuario.id))
+    if estado is not None:
+        consulta = consulta.where(Solicitud.estado == estado)
+    if fecha_desde is not None:
+        desde = datetime.combine(fecha_desde, time.min, ZONA_COLOMBIA)
+        consulta = consulta.where(Solicitud.fecha_decision >= desde)
+    if fecha_hasta is not None:
+        hasta_exclusivo = datetime.combine(fecha_hasta + timedelta(days=1), time.min, ZONA_COLOMBIA)
+        consulta = consulta.where(Solicitud.fecha_decision < hasta_exclusivo)
+
+    filas = db.execute(consulta.order_by(Solicitud.fecha_decision.desc(), Solicitud.id.desc())).all()
+    return [
+        {
+            "id": solicitud.id,
+            "estado": solicitud.estado.value,
+            "solicitante": {
+                "id": solicitante.id,
+                "nombre": solicitante.nombre,
+                "email": solicitante.email,
+                "cargo": solicitante.cargo,
+            },
+            "espacio": {
+                "id": espacio.id,
+                "nombre": espacio.nombre,
+                "tipo": espacio.tipo,
+                "capacidad": espacio.capacidad,
+                "ubicacion": espacio.ubicacion,
+            },
+            "inicio": _local(solicitud.inicio),
+            "fin": _local(solicitud.fin),
+            "asistentes": solicitud.asistentes,
+            "decidida_por": decisor_nombre,
+            "fecha_decision": _local(solicitud.fecha_decision),
+            "motivo_rechazo": solicitud.motivo_rechazo,
+        }
+        for solicitud, espacio, solicitante, decisor_nombre in filas
+    ]
 
 
 def obtener_detalle(db: Session, usuario: Usuario, solicitud_id: int) -> dict | None:

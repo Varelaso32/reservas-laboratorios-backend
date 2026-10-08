@@ -9,6 +9,10 @@ services:
       - "8000:8000"
     environment:
       WATCHFILES_FORCE_POLLING: "true"   # necesario en Windows para que --reload vea los cambios
+      # Credenciales de la BD: se leen del archivo .env (ver .env.example), nunca del código
+      POSTGRES_USER: ${POSTGRES_USER:-reservas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD: copia .env.example como .env}
+      POSTGRES_DB: ${POSTGRES_DB:-reservas}
     volumes:
       - .:/app
     healthcheck:
@@ -18,19 +22,18 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # Lista para cuando se integre SQLAlchemy; por ahora la API no la usa
   db:
     image: postgres:17
     environment:
-      POSTGRES_USER: reservas
-      POSTGRES_PASSWORD: reservas_dev
-      POSTGRES_DB: reservas
+      POSTGRES_USER: ${POSTGRES_USER:-reservas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD: copia .env.example como .env}
+      POSTGRES_DB: ${POSTGRES_DB:-reservas}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U reservas -d reservas"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10

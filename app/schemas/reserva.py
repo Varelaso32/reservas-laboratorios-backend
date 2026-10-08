@@ -15,6 +15,12 @@ class ReservaResumenOut(BaseModel):
     solicitud_id: int = Field(description="Solicitud que generó la reserva")
 
 
+class ReservaAgendaOut(ReservaResumenOut):
+    titular: str = Field(description="Nombre del usuario a cuyo nombre está la reserva")
+    proposito: str = Field(description="Propósito registrado en la solicitud")
+    asistentes: int = Field(description="Cantidad de asistentes")
+
+
 class ReservaDetalleOut(ReservaResumenOut):
     finalizada: bool = Field(description="true si la hora de fin ya pasó")
     titular: str = Field(description="Nombre del usuario a cuyo nombre está la reserva")
