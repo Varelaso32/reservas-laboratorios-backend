@@ -40,7 +40,7 @@ def validar_disponibilidad(
     try:
         inicio, fin = disponibilidad.construir_rango(fecha, hora_inicio, hora_fin)
     except disponibilidad.RangoInvalido as error:
-        raise HTTPException(status_code=422, detail=str(error))
+        raise HTTPException(status_code=422, detail=str(error)) from error
     libre = disponibilidad.esta_disponible(db, espacio_id, inicio, fin)
     mensaje = "El espacio está disponible en ese horario" if libre else "El espacio ya se encuentra ocupado en ese horario"
     return DisponibilidadOut(espacio_id=espacio_id, disponible=libre, mensaje=mensaje)

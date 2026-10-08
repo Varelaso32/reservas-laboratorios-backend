@@ -65,7 +65,7 @@ def cancelar_reserva(
         return reservas.cancelar(db, usuario, reserva_id)
     except reservas.ErrorReserva as error:
         db.rollback()
-        raise HTTPException(status_code=error.codigo, detail=error.mensaje)
+        raise HTTPException(status_code=error.codigo, detail=error.mensaje) from error
 
 
 @router.get(
