@@ -1,0 +1,47 @@
+# Blueprint de Render: API FastAPI (Docker) - dos entornos.
+# - QA:         rama qa,    se redespliega solo con cada push.
+# - Produccion: rama main,  se redespliega solo con cada merge a main.
+# El blueprint se crea una vez desde el dashboard (New > Blueprint) con la rama main.
+services:
+  - type: web
+    runtime: docker
+    name: reservas-ecci-api-qa
+    branch: qa
+    plan: free
+    healthCheckPath: /
+    envVars:
+      # URL de Neon (formato postgresql+psycopg://...?sslmode=require): se pega al crear el blueprint.
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      # Origenes del front permitidos: se completan con la URL final del static site de QA.
+      - key: CORS_ORIGINS
+        value: https://reservas-ecci-web-qa.onrender.com
+      # Opcionales: si se dejan vacias no se crea admin en el arranque.
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_NOMBRE
+        sync: false
+      - key: ADMIN_CLAVE
+        sync: false
+
+  - type: web
+    runtime: docker
+    name: reservas-ecci-api-prod
+    branch: main
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://reservas-ecci-web-prod.onrender.com
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_NOMBRE
+        sync: false
+      - key: ADMIN_CLAVE
+        sync: false
