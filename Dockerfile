@@ -26,4 +26,11 @@ RUN pip install -r requirements.txt
 COPY app ./app
 
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# Arranque en cualquier entorno:
+# - $PORT: Render (u otro PaaS) inyecta el puerto; local se usa 8000.
+# - crear_tablas: idempotente (tablas + btree_gist + trigger de trazabilidad).
+# - crear_admin: solo si las tres variables ADMIN_* están definidas.
+CMD python -m app.utils.crear_tablas \
+    && if [ -n "$ADMIN_EMAIL" ] && [ -n "$ADMIN_NOMBRE" ] && [ -n "$ADMIN_CLAVE" ]; then python -m app.utils.crear_admin || echo "crear_admin fallo (no bloquea el arranque)"; fi \
+    && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
