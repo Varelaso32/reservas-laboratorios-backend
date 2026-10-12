@@ -297,3 +297,53 @@ def test_solicitante_no_modifica_espacios(client, solicitante):
     respuesta = client.patch(f"{URL}/{espacio.id}", json={"capacidad": 30}, headers=cabecera(solicitante))
 
     assert respuesta.status_code == 403
+
+
+def test_consultar_espacio_activo_sin_sesion(client):
+    espacio = _crear_espacio("Publico")
+
+    respuesta = client.get(f"{URL}/{espacio.id}")
+
+    assert respuesta.status_code == 200
+    datos = respuesta.json()
+    assert datos["id"] == espacio.id
+    assert datos["nombre"] == espacio.nombre
+    assert datos["activo"] is True
+
+
+def test_espacio_inactivo_oculto_sin_sesion_y_para_solicitante(client, solicitante):
+    espacio = _crear_espacio("Inactivo oculto", activo=False)
+
+    assert client.get(f"{URL}/{espacio.id}").status_code == 404
+    assert client.get(f"{URL}/{espacio.id}", headers=cabecera(solicitante)).status_code == 404
+
+
+def test_espacio_inactivo_visible_para_admin_y_su_aprobador(client, admin, crear_usuario):
+    espacio = _crear_espacio("Inactivo visible", activo=False)
+    dueno = crear_usuario("coordinador-por-id@reservas.test", Rol.APROBADOR)
+    ajeno = crear_usuario("coordinador-por-id-ajeno@reservas.test", Rol.APROBADOR)
+    with SessionLocal() as db:
+        db.execute(espacio_aprobador.insert().values(espacio_id=espacio.id, usuario_id=dueno.id))
+        db.commit()
+
+    assert client.get(f"{URL}/{espacio.id}", headers=cabecera(admin)).status_code == 200
+    assert client.get(f"{URL}/{espacio.id}", headers=cabecera(dueno)).status_code == 200
+    assert client.get(f"{URL}/{espacio.id}", headers=cabecera(ajeno)).status_code == 404
+
+
+def test_consultar_espacio_inexistente_o_id_invalido(client):
+    assert client.get(f"{URL}/999999").status_code == 404
+    assert client.get(f"{URL}/0").status_code == 422
+
+
+def test_consultar_espacio_con_token_invalido_da_401(client):
+    espacio = _crear_espacio("Token malo")
+
+    respuesta = client.get(f"{URL}/{espacio.id}", headers={"Authorization": "Bearer no-es-un-token"})
+
+    assert respuesta.status_code == 401
+
+
+def test_rutas_fijas_no_se_confunden_con_un_id(client, admin):
+    assert client.get(f"{URL}/admin", headers=cabecera(admin)).status_code == 200
+    assert client.get(f"{URL}/metricas?fecha=2026-10-06", headers=cabecera(admin)).status_code == 200

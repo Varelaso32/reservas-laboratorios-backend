@@ -33,6 +33,23 @@ def visibles_para(usuario: Usuario):
     return consulta.order_by(Espacio.tipo, Espacio.nombre)
 
 
+def obtener(db: Session, usuario: Usuario | None, espacio_id: int) -> Espacio | None:
+    """Un espacio por id. None si no existe o si el usuario no puede verlo
+    (así no se revela que existe).
+
+    Sin sesión o SOLICITANTE: solo activos. APROBADOR: además sus espacios
+    inactivos. ADMIN: cualquiera.
+    """
+    espacio = db.get(Espacio, espacio_id)
+    if espacio is None or espacio.activo:
+        return espacio
+    if usuario is None or usuario.rol == Rol.SOLICITANTE:
+        return None
+    if usuario.rol == Rol.ADMIN or db.scalar(select(gestiona_espacio(espacio.id, usuario.id))):
+        return espacio
+    return None
+
+
 def listar_admin(db: Session, usuario: Usuario) -> list[Espacio]:
     return list(db.scalars(visibles_para(usuario)))
 

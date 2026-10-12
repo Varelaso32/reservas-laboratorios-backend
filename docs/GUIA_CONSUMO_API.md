@@ -242,6 +242,7 @@ Resumen:
 | GET | `/auth/me` | Cualquiera con sesión | 7.3 |
 | GET | `/espacios/` | Público | 7.4 |
 | POST | `/espacios/` | ADMIN o APROBADOR | 7.4D |
+| GET | `/espacios/{espacio_id}` | Público (más datos con sesión) | 7.4E |
 | GET | `/espacios/admin` | ADMIN o APROBADOR | 7.4A |
 | PATCH | `/espacios/{espacio_id}` | ADMIN o APROBADOR | 7.4B |
 | PATCH | `/espacios/{espacio_id}/estado` | ADMIN o APROBADOR | 7.4C |
@@ -416,6 +417,19 @@ Cada espacio incluye `id`, `nombre`, `tipo`, `capacidad`, `ubicacion` y `activo`
 |---|---|
 | 401 | Sin token |
 | 403 | El usuario no es ADMIN |
+
+---
+
+### 7.4E GET /espacios/{espacio_id} — Consultar un espacio por id
+
+No requiere sesión. Sin sesión (o como SOLICITANTE) solo se ven espacios activos; el APROBADOR
+ve también sus espacios inactivos y el ADMIN cualquiera. Si no existe o no se puede ver: 404.
+
+```js
+const espacio = await api("GET", "/espacios/3");
+```
+
+Respuesta 200: `id`, `nombre`, `tipo`, `capacidad`, `ubicacion` y `activo`.
 
 ---
 
