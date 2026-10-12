@@ -49,6 +49,7 @@ Cada paso queda en el historial: CREADA, APROBADA, RECHAZADA.
 |---|---|---|---|---|---|
 | GET | /api/v1/espacios/ | Listar espacios activos | Público | HU-01 | 1 |
 | POST | /api/v1/espacios/ | Crear un espacio | ADMIN, APROBADOR (queda asignado) | HU-19 | — |
+| GET | /api/v1/espacios/{espacio_id} | Consultar un espacio por id | Público (activos); APROBADOR (sus inactivos); ADMIN (todos) | — | — |
 | GET | /api/v1/espacios/admin | Listar espacios activos e inactivos | ADMIN (todos), APROBADOR (sus espacios) | — | — |
 | GET | /api/v1/espacios/disponibles | Consultar espacios disponibles | Público | HU-01 | 1 |
 | GET | /api/v1/espacios/{espacio_id}/disponibilidad | Validar disponibilidad de un espacio | Público | HU-05 | 3 |
@@ -170,6 +171,21 @@ Queda sin aprobadores asignados.
 | 403 | El usuario no es ADMIN |
 | 409 | Ya existe un espacio con ese nombre |
 | 422 | Datos inválidos o campos no permitidos |
+
+### GET /api/v1/espacios/{espacio_id}
+
+Devuelve un espacio (id, nombre, tipo, capacidad, ubicacion, activo). No requiere sesión.
+
+- Sin sesión o SOLICITANTE: solo espacios activos.
+- APROBADOR: además sus espacios asignados inactivos.
+- ADMIN: cualquier espacio.
+
+| Código | Cuándo |
+|---|---|
+| 200 | Datos del espacio |
+| 401 | Se envió un token inválido o vencido (sin token no aplica) |
+| 404 | El espacio no existe o el usuario no puede verlo (no se distingue) |
+| 422 | El id no es un entero positivo |
 
 ### GET /api/v1/espacios/admin
 

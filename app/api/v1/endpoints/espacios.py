@@ -1,10 +1,10 @@
 """Tarea: Backend - endpoint listar espacios y consultar disponibilidad por fecha/horario (HU-01)."""
 from datetime import date, time
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import requiere_rol
+from app.api.deps import get_usuario_opcional, requiere_rol
 from app.core.database import get_db
 from app.models.enums import Rol, TipoEspacio
 from app.models.modelos import Usuario
@@ -199,3 +199,35 @@ def consultar_disponibles(
     except disponibilidad.RangoInvalido as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     return disponibilidad.listar_disponibles(db, inicio, fin, tipo)
+
+
+# IMPORTANTE: va al final. Si se declara antes de /admin, /metricas o /disponibles,
+# FastAPI intenta leer esas palabras como un id y responde 422.
+@router.get(
+    "/{espacio_id}",
+    response_model=EspacioAdminOut,
+    summary="Consultar un espacio por id",
+    description=(
+        "Devuelve los datos de un espacio. No requiere sesión.\n\n"
+        "- Sin sesión o SOLICITANTE: solo espacios activos.\n"
+        "- APROBADOR: también sus espacios asignados inactivos.\n"
+        "- ADMIN: cualquier espacio.\n\n"
+        "Si el espacio no existe o el usuario no puede verlo, responde 404 sin distinguir "
+        "un caso del otro."
+    ),
+    response_description="Datos del espacio",
+    responses={
+        401: {"description": "Se envió un token inválido o vencido"},
+        404: {"description": "El espacio no existe o no tienes acceso a él"},
+        422: {"description": "El id no es un entero positivo"},
+    },
+)
+def consultar_espacio(
+    espacio_id: int = Path(..., gt=0, description="Identificador del espacio"),
+    usuario: Usuario | None = Depends(get_usuario_opcional),
+    db: Session = Depends(get_db),
+):
+    espacio = gestion_espacios.obtener(db, usuario, espacio_id)
+    if espacio is None:
+        raise HTTPException(status_code=404, detail="El espacio no existe o no tienes acceso a él")
+    return espacio
