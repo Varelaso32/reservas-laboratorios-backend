@@ -23,6 +23,7 @@ _404 = {404: {"description": "El usuario no existe"}}
 _409 = {409: {"description": "Ya existe un usuario con ese correo (sin importar mayúsculas ni espacios)"}}
 _422 = {422: {"description": "Datos inválidos: campo faltante, correo mal formado, clave corta o larga, rol inexistente o campo no permitido"}}
 _400_CARGO = "El cargo no corresponde al rol"
+_400_DOMINIO = "El correo no es de un dominio institucional permitido (la misma regla del registro)"
 _400_ADMIN = "Se intentó desactivar o quitar el rol al único ADMIN activo"
 
 
@@ -50,7 +51,7 @@ def _ejecutar(db: Session, accion, *args):
         "- El usuario nace activo."
     ),
     response_description="Usuario creado",
-    responses={400: {"description": _400_CARGO}, **_401, **_403, **_409, **_422},
+    responses={400: {"description": f"{_400_CARGO}, o {_400_DOMINIO.lower()}"}, **_401, **_403, **_409, **_422},
 )
 def crear_usuario(
     datos: UsuarioCrear,
@@ -120,7 +121,7 @@ def consultar_usuario(
     ),
     response_description="Usuario actualizado",
     responses={
-        400: {"description": f"{_400_CARGO}, o {_400_ADMIN.lower()}"},
+        400: {"description": f"{_400_CARGO}, {_400_ADMIN.lower()}, o {_400_DOMINIO.lower()}"},
         **_401, **_403, **_404, **_409, **_422,
     },
 )

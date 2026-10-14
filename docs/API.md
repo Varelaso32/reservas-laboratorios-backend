@@ -49,6 +49,7 @@ Cada paso queda en el historial: CREADA, APROBADA, RECHAZADA.
 |---|---|---|---|---|---|
 | GET | /api/v1/espacios/ | Listar espacios activos | Público | HU-01 | 1 |
 | POST | /api/v1/espacios/ | Crear un espacio | ADMIN, APROBADOR (queda asignado) | HU-19 | — |
+| GET | /api/v1/espacios/{espacio_id} | Consultar un espacio por id | Público (activos); APROBADOR (sus inactivos); ADMIN (todos) | — | — |
 | GET | /api/v1/espacios/admin | Listar espacios activos e inactivos | ADMIN (todos), APROBADOR (sus espacios) | — | — |
 | GET | /api/v1/espacios/disponibles | Consultar espacios disponibles | Público | HU-01 | 1 |
 | GET | /api/v1/espacios/{espacio_id}/disponibilidad | Validar disponibilidad de un espacio | Público | HU-05 | 3 |
@@ -171,6 +172,21 @@ Queda sin aprobadores asignados.
 | 409 | Ya existe un espacio con ese nombre |
 | 422 | Datos inválidos o campos no permitidos |
 
+### GET /api/v1/espacios/{espacio_id}
+
+Devuelve un espacio (id, nombre, tipo, capacidad, ubicacion, activo). No requiere sesión.
+
+- Sin sesión o SOLICITANTE: solo espacios activos.
+- APROBADOR: además sus espacios asignados inactivos.
+- ADMIN: cualquier espacio.
+
+| Código | Cuándo |
+|---|---|
+| 200 | Datos del espacio |
+| 401 | Se envió un token inválido o vencido (sin token no aplica) |
+| 404 | El espacio no existe o el usuario no puede verlo (no se distingue) |
+| 422 | El id no es un entero positivo |
+
 ### GET /api/v1/espacios/admin
 
 Devuelve los espacios, activos e inactivos; es la lista para la pantalla de administración.
@@ -196,8 +212,9 @@ mantienen referencias al espacio.
 
 ### GET /api/v1/espacios/disponibles
 
-Devuelve los espacios activos que no tienen una reserva activa que se cruce con el
-horario pedido. Al aprobarse una solicitud, su espacio deja de aparecer en ese horario.
+Devuelve los espacios activos que no tienen una reserva activa ni una solicitud pendiente
+(de cualquier usuario) que se cruce con el horario pedido (SCRUM-212). Si la solicitud se
+rechaza o se cancela, el horario vuelve a aparecer libre.
 
 | Parámetro | Tipo | Requerido | Descripción |
 |---|---|---|---|
@@ -231,6 +248,10 @@ de enviar la solicitud. Es informativo: al crear la solicitud se vuelve a valida
 
 Respuesta 200: {"espacio_id": 1, "disponible": false, "mensaje": "El espacio ya se encuentra ocupado en ese horario"}
 
+`disponible` es false si hay una reserva activa (mensaje "ya se encuentra ocupado") o una
+solicitud pendiente de cualquier usuario (mensaje "ya tiene una solicitud pendiente en ese
+horario") que se cruce.
+
 | Código | Cuándo |
 |---|---|
 | 200 | Validación hecha (disponible true o false) |
@@ -260,9 +281,9 @@ Validaciones, en este orden:
    (cualquier día de la semana) y no está en el pasado (si no, 422).
 3. Los asistentes no superan la capacidad (si no, 422).
 4. El espacio no tiene una reserva activa que se cruce (si la tiene, 409 y no se registra nada).
-5. El mismo usuario no tiene otra solicitud PENDIENTE para ese espacio en un horario que se cruce (si la tiene, 409).
-
-Una solicitud pendiente de OTRO usuario no bloquea: el aprobador decide.
+5. No existe otra solicitud PENDIENTE para ese espacio en un horario que se cruce, sea del mismo
+   usuario o de otro (SCRUM-212; si existe, 409). Al mismo usuario se le indica el número de su
+   solicitud; a otro usuario no.
 
 Respuesta 201: la solicitud (id, espacio_id, espacio_nombre, inicio, fin, proposito,
 asistentes, equipamiento, estado, motivo_rechazo, fecha_decision, creada_en) más
@@ -274,7 +295,7 @@ asistentes, equipamiento, estado, motivo_rechazo, fecha_decision, creada_en) má
 | 401 | No autenticado |
 | 403 | El usuario no es SOLICITANTE |
 | 404 | El espacio no existe o no está activo |
-| 409 | El espacio está ocupado, o ya tienes una solicitud pendiente que se cruza |
+| 409 | El espacio tiene una reserva activa o una solicitud pendiente (de cualquier usuario) que se cruza |
 | 422 | Datos inválidos |
 
 Ejemplo de cuerpo:
@@ -330,6 +351,8 @@ y PENDIENTES no aparecen.
 | estado | APROBADA / RECHAZADA | No | Filtra por estado |
 | fecha_desde | fecha (AAAA-MM-DD) | No | Fecha inicial de resolución, inclusiva |
 | fecha_hasta | fecha (AAAA-MM-DD) | No | Fecha final de resolución, inclusiva |
+| reserva_desde | fecha (AAAA-MM-DD) | No | Día de uso inicial (fecha de la reserva), inclusivo |
+| reserva_hasta | fecha (AAAA-MM-DD) | No | Día de uso final (fecha de la reserva), inclusivo |
 
 El rango de fechas se interpreta en hora de Colombia. Si el aprobador no administra el espacio,
 la respuesta es `200 []`, igual que la lista de pendientes.

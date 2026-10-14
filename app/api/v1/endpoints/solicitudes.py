@@ -15,7 +15,7 @@ _ERRORES_CREAR = {
     401: {"description": "No autenticado"},
     403: {"description": "Solo los usuarios SOLICITANTE pueden crear solicitudes"},
     404: {"description": "El espacio no existe o no está activo"},
-    409: {"description": "El espacio ya está ocupado en ese horario, o ya tienes una solicitud pendiente que se cruza"},
+    409: {"description": "El espacio ya tiene una reserva activa o una solicitud pendiente (de cualquier usuario) que se cruza"},
     422: {"description": "Datos inválidos: campos vacíos, horario invertido o pasado, o asistentes por encima de la capacidad"},
 }
 

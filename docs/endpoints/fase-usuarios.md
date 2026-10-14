@@ -26,12 +26,17 @@ Para los datos del usuario con sesión ya existe `GET /api/v1/auth/me` (fase 2);
 ## Reglas comunes
 
 - **Correo:** se guarda con `strip()` y en minúsculas. Debe tener un solo `@`, texto antes y
-  después, al menos un punto en el dominio, sin espacios y máximo 254 caracteres. Se aceptan
-  dominios `.test` (los usuarios de prueba los usan). Es único sin importar mayúsculas: lo
+  después, al menos un punto en el dominio, sin espacios y máximo 254 caracteres. Es único sin importar mayúsculas: lo
   garantiza el índice `ux_usuario_email_lower` de la BD, también ante dos peticiones simultáneas.
 - **Clave:** de 8 a 128 caracteres. Se guarda solo el hash Argon2 (`app/core/security.py`).
   No se trunca: Argon2 no tiene el límite de 72 bytes de bcrypt. La clave y el hash no aparecen
   en ninguna respuesta ni en el esquema de Swagger.
+- **Dominio del correo:** la misma regla en todos los casos: registro desde el login, creación y
+  edición desde el panel del ADMIN y el script `crear_admin`. Solo coincidencia exacta:
+  `@ecci.edu.co` y `@reservas.test` entran; `@gmail.com`, `@est.ecci.edu.co` o
+  `@ecci.edu.co.otro.com` no (400). Se configuran con la variable de entorno del sistema
+  `REGISTRO_DOMINIOS` (separados por coma; por defecto `ecci.edu.co,reservas.test`). En
+  producción conviene dejar solo `ecci.edu.co`.
 - **Nombre:** se le quitan los espacios de los extremos; no puede quedar vacío; máximo 120.
 - **Rol y cargo:** el cargo es opcional, pero si se envía debe corresponder al rol.
 
@@ -80,6 +85,7 @@ Respuesta 201:
 
 | Código | Cuándo | Ejemplo |
 |---|---|---|
+| 400 | El correo no es de un dominio permitido | `{"detail": "Solo se pueden registrar correos institucionales (@ecci.edu.co, @reservas.test)"}` |
 | 400 | El cargo no corresponde al rol | `{"detail": "El cargo COORDINADOR_LABORATORIOS no corresponde al rol SOLICITANTE. Cargos válidos: ADMINISTRATIVO, DOCENTE, ESTUDIANTE"}` |
 | 401 | Sin token o token inválido | `{"detail": "No autenticado: el token falta, no es válido o expiró"}` |
 | 403 | El usuario no es ADMIN | `{"detail": "No tienes permiso para esta acción"}` |
@@ -174,7 +180,7 @@ Respuesta 200: el usuario actualizado (misma forma que en la creación).
 
 | Código | Cuándo |
 |---|---|
-| 400 | El cargo final no corresponde al rol final, o se intenta quitar el rol al único ADMIN activo |
+| 400 | El cargo final no corresponde al rol final, se intenta quitar el rol al único ADMIN activo, o el correo nuevo no es de un dominio permitido |
 | 401 | Sin token o token inválido |
 | 403 | El usuario no es ADMIN |
 | 404 | El usuario no existe |
@@ -261,10 +267,7 @@ Notas:
 - La cuenta queda **siempre** con rol SOLICITANTE y cargo ESTUDIANTE. El rol no se toma de la
   petición: si el front manda `rol` (por ejemplo para intentar ser ADMIN), responde 422 y no se crea
   nada.
-- **Dominios permitidos:** solo coincidencia exacta. `@ecci.edu.co` y `@reservas.test` entran;
-  `@gmail.com`, `@est.ecci.edu.co` o `@ecci.edu.co.otro.com` no. Se configuran con la variable de
-  entorno del sistema `REGISTRO_DOMINIOS` (separados por coma; por defecto
-  `ecci.edu.co,reservas.test`). En producción conviene dejar solo `ecci.edu.co`.
+- **Dominios permitidos:** los de las reglas comunes (los mismos que exige el panel del ADMIN).
 - **No inicia sesión.** Después del 201 el front debe mandar al usuario al login
   (`POST /api/v1/auth/login`).
 - Si quien se registró es docente o administrativo, un ADMIN le corrige el cargo con
@@ -282,7 +285,8 @@ docker compose exec -e ADMIN_EMAIL=admin@ecci.edu.co -e ADMIN_NOMBRE="Administra
 
 - Las variables van en el comando y no en el `.env`, porque `config.py` rechaza variables que no
   tiene declaradas.
-- Aplica las mismas validaciones que la API (correo, clave de 8 a 128 caracteres) y crea el
+- Aplica las mismas validaciones que la API (correo **de un dominio permitido**, clave de 8 a 128
+  caracteres) y crea el
   usuario con rol ADMIN y cargo ADMINISTRADOR_SISTEMA.
 - Si el correo ya existe, no cambia nada. Se puede correr varias veces.
 - En desarrollo no hace falta: `datos_prueba` + `claves_prueba` ya crean `admin@reservas.test`.

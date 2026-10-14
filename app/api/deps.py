@@ -45,6 +45,19 @@ def get_usuario_actual(
     return usuario
 
 
+def get_usuario_opcional(
+    token: str | None = Depends(oauth2_scheme), db: Session = Depends(get_db)
+) -> Usuario | None:
+    """Para endpoints públicos que muestran más datos con sesión.
+
+    Sin token devuelve None. Un token inválido o vencido sí da 401: quien lo envía
+    espera estar autenticado y debe saber que no lo está.
+    """
+    if not token:
+        return None
+    return get_usuario_actual(token, db)
+
+
 def requiere_rol(*roles: Rol):
     def verificar(usuario: Usuario = Depends(get_usuario_actual)) -> Usuario:
         if usuario.rol not in roles:

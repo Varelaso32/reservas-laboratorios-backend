@@ -242,6 +242,7 @@ Resumen:
 | GET | `/auth/me` | Cualquiera con sesión | 7.3 |
 | GET | `/espacios/` | Público | 7.4 |
 | POST | `/espacios/` | ADMIN o APROBADOR | 7.4D |
+| GET | `/espacios/{espacio_id}` | Público (más datos con sesión) | 7.4E |
 | GET | `/espacios/admin` | ADMIN o APROBADOR | 7.4A |
 | PATCH | `/espacios/{espacio_id}` | ADMIN o APROBADOR | 7.4B |
 | PATCH | `/espacios/{espacio_id}/estado` | ADMIN o APROBADOR | 7.4C |
@@ -419,6 +420,19 @@ Cada espacio incluye `id`, `nombre`, `tipo`, `capacidad`, `ubicacion` y `activo`
 
 ---
 
+### 7.4E GET /espacios/{espacio_id} — Consultar un espacio por id
+
+No requiere sesión. Sin sesión (o como SOLICITANTE) solo se ven espacios activos; el APROBADOR
+ve también sus espacios inactivos y el ADMIN cualquiera. Si no existe o no se puede ver: 404.
+
+```js
+const espacio = await api("GET", "/espacios/3");
+```
+
+Respuesta 200: `id`, `nombre`, `tipo`, `capacidad`, `ubicacion` y `activo`.
+
+---
+
 ### 7.4D POST /espacios/ — Crear un espacio
 
 Roles **ADMIN** y **APROBADOR**. Si lo crea un APROBADOR, queda asignado como su
@@ -552,6 +566,10 @@ Respuesta 200 (siempre 200, esté libre o no):
 {"espacio_id": 1, "disponible": false, "mensaje": "El espacio ya se encuentra ocupado en ese horario"}
 ```
 
+`disponible: false` también sale cuando otro usuario ya tiene una solicitud **pendiente** en ese
+horario; el mensaje es entonces "El espacio ya tiene una solicitud pendiente en ese horario".
+Muestra `mensaje` tal cual y no dejes enviar la solicitud.
+
 ```json
 {"espacio_id": 1, "disponible": true, "mensaje": "El espacio está disponible en ese horario"}
 ```
@@ -676,7 +694,8 @@ Respuesta **201**:
 | 403 | No tienes permiso para esta acción | El usuario no es SOLICITANTE |
 | 404 | El espacio no existe o no está activo | |
 | 409 | El espacio ya está ocupado en ese horario | Hay una reserva aprobada que se cruza |
-| 409 | Ya tienes una solicitud pendiente (#N) para ese espacio en un horario que se cruza | Evita duplicados, por ejemplo por doble clic |
+| 409 | Ya tienes una solicitud pendiente (#N) para ese espacio en un horario que se cruza | Tu propia solicitud repetida, por ejemplo por doble clic |
+| 409 | El espacio ya tiene una solicitud pendiente en ese horario | Otro usuario ya pidió esa franja (SCRUM-212) |
 | 422 | La hora de fin debe ser mayor que la hora de inicio | |
 | 422 | No se puede solicitar un espacio en una fecha u hora pasada | |
 | 422 | La cantidad de asistentes (21) supera la capacidad del espacio (20) | |
@@ -793,6 +812,8 @@ rechazar siguen siendo exclusivos del APROBADOR.
 | `estado` | No | `APROBADA` o `RECHAZADA` |
 | `fecha_desde` | No | Fecha inicial de resolución, inclusiva (`AAAA-MM-DD`) |
 | `fecha_hasta` | No | Fecha final de resolución, inclusiva (`AAAA-MM-DD`) |
+| `reserva_desde` | No | Día de uso inicial (fecha de la reserva), inclusivo (`AAAA-MM-DD`) |
+| `reserva_hasta` | No | Día de uso final (fecha de la reserva), inclusivo (`AAAA-MM-DD`) |
 
 El rango de fechas se interpreta en hora de Colombia. Las solicitudes PENDIENTES y CANCELADAS
 no aparecen.

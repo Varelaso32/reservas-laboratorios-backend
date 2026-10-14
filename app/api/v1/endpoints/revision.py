@@ -48,7 +48,9 @@ def solicitudes_pendientes(
         "Devuelve las solicitudes APROBADAS y RECHAZADAS de un espacio, ordenadas desde la "
         "resolución más reciente. El APROBADOR solo ve los espacios que administra; el ADMIN "
         "ve cualquier espacio, solo en consulta (no puede aprobar ni rechazar). Se puede filtrar "
-        "por estado y por rango de fecha de resolución (hora de Colombia). No incluye "
+        "por estado, por rango de fecha de resolución (`fecha_desde`/`fecha_hasta`) y por rango "
+        "de fecha de la reserva, es decir el día de uso (`reserva_desde`/`reserva_hasta`). "
+        "Las fechas son inclusivas, en hora de Colombia. No incluye "
         "solicitudes PENDIENTES ni CANCELADAS."
     ),
     response_description="Solicitudes resueltas del espacio",
@@ -65,13 +67,19 @@ def solicitudes_resueltas(
     ),
     fecha_desde: date | None = Query(None, description="Fecha inicial de resolución (AAAA-MM-DD)"),
     fecha_hasta: date | None = Query(None, description="Fecha final de resolución, inclusiva (AAAA-MM-DD)"),
+    reserva_desde: date | None = Query(None, description="Día de uso inicial, inclusivo (AAAA-MM-DD)"),
+    reserva_hasta: date | None = Query(None, description="Día de uso final, inclusivo (AAAA-MM-DD)"),
     usuario: Usuario = Depends(requiere_rol(Rol.APROBADOR, Rol.ADMIN)),
     db: Session = Depends(get_db),
 ):
     if fecha_desde is not None and fecha_hasta is not None and fecha_desde > fecha_hasta:
         raise HTTPException(status_code=422, detail="fecha_desde no puede ser posterior a fecha_hasta")
+    if reserva_desde is not None and reserva_hasta is not None and reserva_desde > reserva_hasta:
+        raise HTTPException(status_code=422, detail="reserva_desde no puede ser posterior a reserva_hasta")
     estado_enum = None if estado is None else EstadoSolicitud(estado)
-    return revision.listar_resueltas(db, usuario, espacio_id, estado_enum, fecha_desde, fecha_hasta)
+    return revision.listar_resueltas(
+        db, usuario, espacio_id, estado_enum, fecha_desde, fecha_hasta, reserva_desde, reserva_hasta
+    )
 
 
 @router.get(
