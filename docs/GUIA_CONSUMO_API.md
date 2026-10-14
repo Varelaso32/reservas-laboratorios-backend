@@ -566,6 +566,10 @@ Respuesta 200 (siempre 200, esté libre o no):
 {"espacio_id": 1, "disponible": false, "mensaje": "El espacio ya se encuentra ocupado en ese horario"}
 ```
 
+`disponible: false` también sale cuando otro usuario ya tiene una solicitud **pendiente** en ese
+horario; el mensaje es entonces "El espacio ya tiene una solicitud pendiente en ese horario".
+Muestra `mensaje` tal cual y no dejes enviar la solicitud.
+
 ```json
 {"espacio_id": 1, "disponible": true, "mensaje": "El espacio está disponible en ese horario"}
 ```

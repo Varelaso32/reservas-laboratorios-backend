@@ -18,8 +18,9 @@ router = APIRouter()
     summary="Validar disponibilidad de un espacio",
     description=(
         "**HU-05.** Indica si un espacio está libre en un horario, para que el frontend pueda "
-        "avisar antes de enviar la solicitud. Es solo informativo: al crear la solicitud la "
-        "disponibilidad se vuelve a validar."
+        "avisar antes de enviar la solicitud. No está disponible si tiene una reserva activa o "
+        "una solicitud pendiente de cualquier usuario que se cruce (SCRUM-212). Es solo "
+        "informativo: al crear la solicitud la disponibilidad se vuelve a validar."
     ),
     response_description="Resultado de la validación",
     responses={
@@ -41,6 +42,14 @@ def validar_disponibilidad(
         inicio, fin = disponibilidad.construir_rango(fecha, hora_inicio, hora_fin)
     except disponibilidad.RangoInvalido as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
-    libre = disponibilidad.esta_disponible(db, espacio_id, inicio, fin)
-    mensaje = "El espacio está disponible en ese horario" if libre else "El espacio ya se encuentra ocupado en ese horario"
-    return DisponibilidadOut(espacio_id=espacio_id, disponible=libre, mensaje=mensaje)
+    if not disponibilidad.esta_disponible(db, espacio_id, inicio, fin):
+        return DisponibilidadOut(
+            espacio_id=espacio_id, disponible=False, mensaje="El espacio ya se encuentra ocupado en ese horario"
+        )
+    if disponibilidad.tiene_pendiente(db, espacio_id, inicio, fin):
+        return DisponibilidadOut(
+            espacio_id=espacio_id,
+            disponible=False,
+            mensaje="El espacio ya tiene una solicitud pendiente en ese horario",
+        )
+    return DisponibilidadOut(espacio_id=espacio_id, disponible=True, mensaje="El espacio está disponible en ese horario")

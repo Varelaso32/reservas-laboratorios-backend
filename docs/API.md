@@ -212,8 +212,9 @@ mantienen referencias al espacio.
 
 ### GET /api/v1/espacios/disponibles
 
-Devuelve los espacios activos que no tienen una reserva activa que se cruce con el
-horario pedido. Al aprobarse una solicitud, su espacio deja de aparecer en ese horario.
+Devuelve los espacios activos que no tienen una reserva activa ni una solicitud pendiente
+(de cualquier usuario) que se cruce con el horario pedido (SCRUM-212). Si la solicitud se
+rechaza o se cancela, el horario vuelve a aparecer libre.
 
 | Parámetro | Tipo | Requerido | Descripción |
 |---|---|---|---|
@@ -246,6 +247,10 @@ de enviar la solicitud. Es informativo: al crear la solicitud se vuelve a valida
 | hora_fin | hora (HH:MM) | Sí | Fin |
 
 Respuesta 200: {"espacio_id": 1, "disponible": false, "mensaje": "El espacio ya se encuentra ocupado en ese horario"}
+
+`disponible` es false si hay una reserva activa (mensaje "ya se encuentra ocupado") o una
+solicitud pendiente de cualquier usuario (mensaje "ya tiene una solicitud pendiente en ese
+horario") que se cruce.
 
 | Código | Cuándo |
 |---|---|

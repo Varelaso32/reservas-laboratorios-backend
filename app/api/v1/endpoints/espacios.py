@@ -178,8 +178,9 @@ def listar_espacios(
     response_model=list[EspacioOut],
     summary="Consultar espacios disponibles",
     description=(
-        "**HU-01.** Devuelve los espacios activos que NO tienen una reserva activa que se cruce "
-        "con el horario consultado. Las reservas canceladas no bloquean, y una reserva que termina "
+        "**HU-01.** Devuelve los espacios activos que NO tienen una reserva activa ni una "
+        "solicitud pendiente (de cualquier usuario) que se cruce con el horario consultado. "
+        "Las reservas canceladas no bloquean, y una reserva que termina "
         "justo cuando empieza la consulta tampoco.\n\n"
         "Las horas se interpretan en hora de Colombia (-05:00). "
         "Si no hay espacios disponibles, responde 200 con una lista vacía."

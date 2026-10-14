@@ -97,3 +97,21 @@ def test_horarios_contiguos_u_otro_espacio_no_se_bloquean(client, solicitante, c
 
     assert contigua.status_code == 201
     assert en_otro_espacio.status_code == 201
+
+
+def test_consultas_de_disponibilidad_tienen_en_cuenta_las_pendientes(client, solicitante):
+    espacio_id = _crear_espacio()
+    fecha = _proximo_domingo()
+    client.post(URL, json=_cuerpo(espacio_id, fecha, "08:00", "10:00"), headers=cabecera(solicitante))
+    rango = f"fecha={fecha}&hora_inicio=09:00&hora_fin=11:00"
+
+    individual = client.get(f"/api/v1/espacios/{espacio_id}/disponibilidad?{rango}").json()
+    disponibles = client.get(f"/api/v1/espacios/disponibles?{rango}").json()
+    contigua = client.get(
+        f"/api/v1/espacios/{espacio_id}/disponibilidad?fecha={fecha}&hora_inicio=10:00&hora_fin=12:00"
+    ).json()
+
+    assert individual["disponible"] is False
+    assert "pendiente" in individual["mensaje"]
+    assert espacio_id not in [espacio["id"] for espacio in disponibles]
+    assert contigua["disponible"] is True
