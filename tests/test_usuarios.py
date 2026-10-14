@@ -72,8 +72,8 @@ def test_correo_duplicado_409(client, admin):
 
 
 def test_correo_duplicado_con_mayusculas_y_espacios_409(client, admin):
-    assert client.post(URL, json=_datos(email="juan@x.com"), headers=cabecera(admin)).status_code == 201
-    r = client.post(URL, json=_datos(email="  JUAN@X.com "), headers=cabecera(admin))
+    assert client.post(URL, json=_datos(email="juan@ecci.edu.co"), headers=cabecera(admin)).status_code == 201
+    r = client.post(URL, json=_datos(email="  JUAN@ECCI.edu.co "), headers=cabecera(admin))
     assert r.status_code == 409
     assert r.json() == {"detail": "Ya existe un usuario con ese correo"}
 
@@ -93,7 +93,7 @@ def test_correo_duplicado_en_simultaneo(admin):
                 db.rollback()
                 resultados.append(error.codigo)
 
-    hilos = [threading.Thread(target=crear, args=(e,)) for e in ("carrera@x.com", "CARRERA@x.com")]
+    hilos = [threading.Thread(target=crear, args=(e,)) for e in ("carrera@ecci.edu.co", "CARRERA@ecci.edu.co")]
     for h in hilos:
         h.start()
     for h in hilos:
@@ -102,7 +102,7 @@ def test_correo_duplicado_en_simultaneo(admin):
     assert 409 in resultados
     assert len(resultados) == 2
     with SessionLocal() as db:
-        assert len(db.scalars(select(Usuario).where(Usuario.email == "carrera@x.com")).all()) == 1
+        assert len(db.scalars(select(Usuario).where(Usuario.email == "carrera@ecci.edu.co")).all()) == 1
 
 
 def test_rol_invalido_422(client, admin):
@@ -323,3 +323,37 @@ def test_script_crear_admin_sin_variables(monkeypatch):
     for v in ("ADMIN_EMAIL", "ADMIN_NOMBRE", "ADMIN_CLAVE"):
         monkeypatch.delenv(v, raising=False)
     assert crear_admin.crear_admin() == 1
+
+
+@pytest.mark.parametrize("email", ["juan@gmail.com", "juan@ecci.edu.com", "juan@sub.ecci.edu.co"])
+def test_admin_no_crea_usuarios_de_otros_dominios_400(client, admin, email):
+    r = client.post(URL, json=_datos(email=email), headers=cabecera(admin))
+
+    assert r.status_code == 400
+    assert "correos institucionales" in r.json()["detail"]
+    with SessionLocal() as db:
+        assert db.scalar(select(Usuario).where(Usuario.email == email)) is None
+
+
+def test_admin_no_cambia_correo_a_otro_dominio_400(client, admin, solicitante):
+    r = client.patch(f"{URL}{solicitante.id}", json={"email": "estudiante@gmail.com"}, headers=cabecera(admin))
+
+    assert r.status_code == 400
+    with SessionLocal() as db:
+        assert db.get(Usuario, solicitante.id).email == solicitante.email
+
+
+def test_admin_cambia_correo_dentro_del_dominio(client, admin, solicitante):
+    r = client.patch(f"{URL}{solicitante.id}", json={"email": "nuevo.correo@ecci.edu.co"}, headers=cabecera(admin))
+
+    assert r.status_code == 200
+    assert r.json()["email"] == "nuevo.correo@ecci.edu.co"
+
+
+def test_script_crear_admin_rechaza_otro_dominio(monkeypatch, capsys):
+    monkeypatch.setenv("ADMIN_EMAIL", "admin@gmail.com")
+    monkeypatch.setenv("ADMIN_NOMBRE", "Admin Externo")
+    monkeypatch.setenv("ADMIN_CLAVE", "ClaveInicial2026*")
+
+    assert crear_admin.crear_admin() == 1
+    assert "correos institucionales" in capsys.readouterr().out
