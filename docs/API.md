@@ -276,9 +276,9 @@ Validaciones, en este orden:
    (cualquier día de la semana) y no está en el pasado (si no, 422).
 3. Los asistentes no superan la capacidad (si no, 422).
 4. El espacio no tiene una reserva activa que se cruce (si la tiene, 409 y no se registra nada).
-5. El mismo usuario no tiene otra solicitud PENDIENTE para ese espacio en un horario que se cruce (si la tiene, 409).
-
-Una solicitud pendiente de OTRO usuario no bloquea: el aprobador decide.
+5. No existe otra solicitud PENDIENTE para ese espacio en un horario que se cruce, sea del mismo
+   usuario o de otro (SCRUM-212; si existe, 409). Al mismo usuario se le indica el número de su
+   solicitud; a otro usuario no.
 
 Respuesta 201: la solicitud (id, espacio_id, espacio_nombre, inicio, fin, proposito,
 asistentes, equipamiento, estado, motivo_rechazo, fecha_decision, creada_en) más
@@ -290,7 +290,7 @@ asistentes, equipamiento, estado, motivo_rechazo, fecha_decision, creada_en) má
 | 401 | No autenticado |
 | 403 | El usuario no es SOLICITANTE |
 | 404 | El espacio no existe o no está activo |
-| 409 | El espacio está ocupado, o ya tienes una solicitud pendiente que se cruza |
+| 409 | El espacio tiene una reserva activa o una solicitud pendiente (de cualquier usuario) que se cruza |
 | 422 | Datos inválidos |
 
 Ejemplo de cuerpo:
@@ -346,6 +346,8 @@ y PENDIENTES no aparecen.
 | estado | APROBADA / RECHAZADA | No | Filtra por estado |
 | fecha_desde | fecha (AAAA-MM-DD) | No | Fecha inicial de resolución, inclusiva |
 | fecha_hasta | fecha (AAAA-MM-DD) | No | Fecha final de resolución, inclusiva |
+| reserva_desde | fecha (AAAA-MM-DD) | No | Día de uso inicial (fecha de la reserva), inclusivo |
+| reserva_hasta | fecha (AAAA-MM-DD) | No | Día de uso final (fecha de la reserva), inclusivo |
 
 El rango de fechas se interpreta en hora de Colombia. Si el aprobador no administra el espacio,
 la respuesta es `200 []`, igual que la lista de pendientes.

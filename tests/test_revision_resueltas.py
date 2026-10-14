@@ -180,3 +180,29 @@ def test_solicitante_no_consulta_pendientes(client, solicitante):
     respuesta = client.get("/api/v1/solicitudes/pendientes", headers=cabecera(solicitante))
 
     assert respuesta.status_code == 403
+
+
+def test_filtro_por_fecha_de_la_reserva(client, solicitante, crear_usuario):
+    aprobador = crear_usuario("filtro-reserva@reservas.test", Rol.APROBADOR)
+    espacio_id = _crear_espacio_aprobador(aprobador.id)
+    ids = _crear_historial(espacio_id, aprobador.id, solicitante.id)
+    # _crear_historial pone el uso de la solicitud i en hoy + (i + 1) días
+    hoy = datetime.now(ZONA_COLOMBIA).date()
+    dia_aprobada = (hoy + timedelta(days=1)).isoformat()
+    dia_rechazada = (hoy + timedelta(days=2)).isoformat()
+
+    solo_aprobada = client.get(
+        f"{URL}?espacio_id={espacio_id}&reserva_desde={dia_aprobada}&reserva_hasta={dia_aprobada}",
+        headers=cabecera(aprobador),
+    )
+    desde_rechazada = client.get(
+        f"{URL}?espacio_id={espacio_id}&reserva_desde={dia_rechazada}", headers=cabecera(aprobador)
+    )
+    invertido = client.get(
+        f"{URL}?espacio_id={espacio_id}&reserva_desde={dia_rechazada}&reserva_hasta={dia_aprobada}",
+        headers=cabecera(aprobador),
+    )
+
+    assert [s["id"] for s in solo_aprobada.json()] == [ids[0]]
+    assert [s["id"] for s in desde_rechazada.json()] == [ids[1]]
+    assert invertido.status_code == 422

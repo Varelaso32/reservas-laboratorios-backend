@@ -690,7 +690,8 @@ Respuesta **201**:
 | 403 | No tienes permiso para esta acción | El usuario no es SOLICITANTE |
 | 404 | El espacio no existe o no está activo | |
 | 409 | El espacio ya está ocupado en ese horario | Hay una reserva aprobada que se cruza |
-| 409 | Ya tienes una solicitud pendiente (#N) para ese espacio en un horario que se cruza | Evita duplicados, por ejemplo por doble clic |
+| 409 | Ya tienes una solicitud pendiente (#N) para ese espacio en un horario que se cruza | Tu propia solicitud repetida, por ejemplo por doble clic |
+| 409 | El espacio ya tiene una solicitud pendiente en ese horario | Otro usuario ya pidió esa franja (SCRUM-212) |
 | 422 | La hora de fin debe ser mayor que la hora de inicio | |
 | 422 | No se puede solicitar un espacio en una fecha u hora pasada | |
 | 422 | La cantidad de asistentes (21) supera la capacidad del espacio (20) | |
@@ -807,6 +808,8 @@ rechazar siguen siendo exclusivos del APROBADOR.
 | `estado` | No | `APROBADA` o `RECHAZADA` |
 | `fecha_desde` | No | Fecha inicial de resolución, inclusiva (`AAAA-MM-DD`) |
 | `fecha_hasta` | No | Fecha final de resolución, inclusiva (`AAAA-MM-DD`) |
+| `reserva_desde` | No | Día de uso inicial (fecha de la reserva), inclusivo (`AAAA-MM-DD`) |
+| `reserva_hasta` | No | Día de uso final (fecha de la reserva), inclusivo (`AAAA-MM-DD`) |
 
 El rango de fechas se interpreta en hora de Colombia. Las solicitudes PENDIENTES y CANCELADAS
 no aparecen.
