@@ -68,19 +68,25 @@ def crear(db: Session, usuario: Usuario, datos: SolicitudCrear) -> dict:
     if not disponibilidad.esta_disponible(db, espacio.id, inicio, fin):
         raise ErrorSolicitud(409, "El espacio ya está ocupado en ese horario")
 
-    duplicada = db.scalar(
-        select(Solicitud.id).where(
-            Solicitud.solicitante_id == usuario.id,
+    # SCRUM-212: una solicitud PENDIENTE de cualquier usuario también bloquea el horario.
+    # El FOR UPDATE del espacio (arriba) evita que dos solicitudes simultáneas pasen las dos.
+    pendiente = db.execute(
+        select(Solicitud.id, Solicitud.solicitante_id)
+        .where(
             Solicitud.espacio_id == espacio.id,
             Solicitud.estado == EstadoSolicitud.PENDIENTE,
             Solicitud.inicio < fin,
             Solicitud.fin > inicio,
         )
-    )
-    if duplicada:
-        raise ErrorSolicitud(
-            409, f"Ya tienes una solicitud pendiente (#{duplicada}) para ese espacio en un horario que se cruza"
-        )
+        .limit(1)
+    ).first()
+    if pendiente:
+        # A otro usuario no se le muestra el número de una solicitud que no es suya
+        if pendiente.solicitante_id == usuario.id:
+            mensaje = f"Ya tienes una solicitud pendiente (#{pendiente.id}) para ese espacio en un horario que se cruza"
+        else:
+            mensaje = "El espacio ya tiene una solicitud pendiente en ese horario"
+        raise ErrorSolicitud(409, mensaje)
 
     solicitud = Solicitud(
         solicitante_id=usuario.id,

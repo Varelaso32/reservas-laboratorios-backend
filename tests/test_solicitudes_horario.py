@@ -58,3 +58,60 @@ def test_se_puede_reservar_cualquier_dia_dentro_del_horario(client, solicitante)
     )
 
     assert respuesta.status_code == 201
+
+
+def test_otro_usuario_no_puede_pedir_horario_con_solicitud_pendiente(client, solicitante, crear_usuario):
+    espacio_id = _crear_espacio()
+    otro = crear_usuario("otro-solicitante@reservas.test")
+    fecha = _proximo_domingo()
+
+    primera = client.post(URL, json=_cuerpo(espacio_id, fecha, "08:00", "10:00"), headers=cabecera(solicitante))
+    cruzada = client.post(URL, json=_cuerpo(espacio_id, fecha, "09:00", "11:00"), headers=cabecera(otro))
+
+    assert primera.status_code == 201
+    assert cruzada.status_code == 409
+    # No se revela el número de la solicitud de otra persona
+    assert "#" not in cruzada.json()["detail"]
+
+
+def test_mismo_usuario_recibe_el_numero_de_su_solicitud(client, solicitante):
+    espacio_id = _crear_espacio()
+    fecha = _proximo_domingo()
+
+    primera = client.post(URL, json=_cuerpo(espacio_id, fecha, "08:00", "10:00"), headers=cabecera(solicitante))
+    repetida = client.post(URL, json=_cuerpo(espacio_id, fecha, "08:00", "10:00"), headers=cabecera(solicitante))
+
+    assert repetida.status_code == 409
+    assert f"#{primera.json()['id']}" in repetida.json()["detail"]
+
+
+def test_horarios_contiguos_u_otro_espacio_no_se_bloquean(client, solicitante, crear_usuario):
+    espacio_id = _crear_espacio()
+    otro_espacio = _crear_espacio()
+    otro = crear_usuario("contiguo@reservas.test")
+    fecha = _proximo_domingo()
+
+    client.post(URL, json=_cuerpo(espacio_id, fecha, "08:00", "10:00"), headers=cabecera(solicitante))
+    contigua = client.post(URL, json=_cuerpo(espacio_id, fecha, "10:00", "12:00"), headers=cabecera(otro))
+    en_otro_espacio = client.post(URL, json=_cuerpo(otro_espacio, fecha, "08:00", "10:00"), headers=cabecera(otro))
+
+    assert contigua.status_code == 201
+    assert en_otro_espacio.status_code == 201
+
+
+def test_consultas_de_disponibilidad_tienen_en_cuenta_las_pendientes(client, solicitante):
+    espacio_id = _crear_espacio()
+    fecha = _proximo_domingo()
+    client.post(URL, json=_cuerpo(espacio_id, fecha, "08:00", "10:00"), headers=cabecera(solicitante))
+    rango = f"fecha={fecha}&hora_inicio=09:00&hora_fin=11:00"
+
+    individual = client.get(f"/api/v1/espacios/{espacio_id}/disponibilidad?{rango}").json()
+    disponibles = client.get(f"/api/v1/espacios/disponibles?{rango}").json()
+    contigua = client.get(
+        f"/api/v1/espacios/{espacio_id}/disponibilidad?fecha={fecha}&hora_inicio=10:00&hora_fin=12:00"
+    ).json()
+
+    assert individual["disponible"] is False
+    assert "pendiente" in individual["mensaje"]
+    assert espacio_id not in [espacio["id"] for espacio in disponibles]
+    assert contigua["disponible"] is True

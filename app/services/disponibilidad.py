@@ -4,8 +4,8 @@ from datetime import date, datetime, time
 from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
-from app.models.enums import EstadoReserva, TipoEspacio
-from app.models.modelos import Espacio, Reserva
+from app.models.enums import EstadoReserva, EstadoSolicitud, TipoEspacio
+from app.models.modelos import Espacio, Reserva, Solicitud
 from app.utils.fechas import ZONA_COLOMBIA
 
 
@@ -34,6 +34,16 @@ def _ocupado(espacio_id, inicio: datetime, fin: datetime):
     )
 
 
+def _pendiente(espacio_id, inicio: datetime, fin: datetime):
+    # SCRUM-212: una solicitud PENDIENTE de cualquier usuario también aparta el horario
+    return exists().where(
+        Solicitud.espacio_id == espacio_id,
+        Solicitud.estado == EstadoSolicitud.PENDIENTE,
+        Solicitud.inicio < fin,
+        Solicitud.fin > inicio,
+    )
+
+
 def listar_espacios(db: Session, tipo: TipoEspacio | None = None) -> list[Espacio]:
     consulta = select(Espacio).where(Espacio.activo.is_(True))
     if tipo is not None:
@@ -44,11 +54,22 @@ def listar_espacios(db: Session, tipo: TipoEspacio | None = None) -> list[Espaci
 def listar_disponibles(
     db: Session, inicio: datetime, fin: datetime, tipo: TipoEspacio | None = None
 ) -> list[Espacio]:
-    consulta = select(Espacio).where(Espacio.activo.is_(True), ~_ocupado(Espacio.id, inicio, fin))
+    """Espacios sin reserva activa ni solicitud pendiente que se cruce: lo que de verdad se puede pedir."""
+    consulta = select(Espacio).where(
+        Espacio.activo.is_(True),
+        ~_ocupado(Espacio.id, inicio, fin),
+        ~_pendiente(Espacio.id, inicio, fin),
+    )
     if tipo is not None:
         consulta = consulta.where(Espacio.tipo == tipo)
     return list(db.scalars(consulta.order_by(Espacio.tipo, Espacio.nombre)))
 
 
 def esta_disponible(db: Session, espacio_id: int, inicio: datetime, fin: datetime) -> bool:
+    """Solo mira reservas ACTIVAS. La aprobación lo usa así: la solicitud que se aprueba
+    está pendiente y no debe bloquearse a sí misma."""
     return not db.scalar(select(_ocupado(espacio_id, inicio, fin)))
+
+
+def tiene_pendiente(db: Session, espacio_id: int, inicio: datetime, fin: datetime) -> bool:
+    return bool(db.scalar(select(_pendiente(espacio_id, inicio, fin))))

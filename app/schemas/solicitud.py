@@ -51,5 +51,5 @@ class SolicitudCreadaOut(SolicitudOut):
 
 class DisponibilidadOut(BaseModel):
     espacio_id: int = Field(description="Identificador del espacio")
-    disponible: bool = Field(description="true si no hay reservas activas que se crucen")
+    disponible: bool = Field(description="true si no hay reservas activas ni solicitudes pendientes que se crucen")
     mensaje: str = Field(description="Explicación para el usuario", examples=["El espacio está disponible en ese horario"])

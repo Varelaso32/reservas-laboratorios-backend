@@ -73,10 +73,14 @@ def listar_resueltas(
     estado: EstadoSolicitud | None = None,
     fecha_desde: date | None = None,
     fecha_hasta: date | None = None,
+    reserva_desde: date | None = None,
+    reserva_hasta: date | None = None,
 ) -> list[dict]:
     """Lista decisiones aprobadas o rechazadas de un espacio.
 
     El APROBADOR solo ve los espacios que tiene asignados; el ADMIN ve cualquiera.
+    fecha_desde/hasta filtran por la fecha de la decisión; reserva_desde/hasta por el
+    día de uso (inicio de la solicitud). Todas son inclusivas, en hora de Colombia.
     """
     consulta = (
         select(Solicitud, Espacio, Solicitante, Decisor.nombre)
@@ -98,6 +102,11 @@ def listar_resueltas(
     if fecha_hasta is not None:
         hasta_exclusivo = datetime.combine(fecha_hasta + timedelta(days=1), time.min, ZONA_COLOMBIA)
         consulta = consulta.where(Solicitud.fecha_decision < hasta_exclusivo)
+    if reserva_desde is not None:
+        consulta = consulta.where(Solicitud.inicio >= datetime.combine(reserva_desde, time.min, ZONA_COLOMBIA))
+    if reserva_hasta is not None:
+        hasta_exclusivo = datetime.combine(reserva_hasta + timedelta(days=1), time.min, ZONA_COLOMBIA)
+        consulta = consulta.where(Solicitud.inicio < hasta_exclusivo)
 
     filas = db.execute(consulta.order_by(Solicitud.fecha_decision.desc(), Solicitud.id.desc())).all()
     return [
