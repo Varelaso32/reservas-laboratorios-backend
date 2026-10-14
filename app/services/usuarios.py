@@ -19,9 +19,10 @@ CARGOS_POR_ROL = {
     Rol.ADMIN: {Cargo.ADMINISTRADOR_SISTEMA},
 }
 
-# Dominios permitidos en el auto-registro. Se lee de una variable de entorno del
-# sistema, no del .env (config.py rechaza variables que no conoce). En producción
-# se puede dejar solo ecci.edu.co: REGISTRO_DOMINIOS=ecci.edu.co
+# Dominios de correo permitidos para cualquier usuario: auto-registro, creación y
+# edición desde el panel del ADMIN y el script crear_admin. Se lee de una variable de
+# entorno del sistema, no del .env (config.py rechaza variables que no conoce). En
+# producción se puede dejar solo ecci.edu.co: REGISTRO_DOMINIOS=ecci.edu.co
 DOMINIOS_REGISTRO = {
     d.strip().lower() for d in os.getenv("REGISTRO_DOMINIOS", "ecci.edu.co,reservas.test").split(",") if d.strip()
 }
@@ -44,6 +45,13 @@ def _validar_cargo(rol: Rol, cargo: Cargo | None) -> None:
     if cargo is not None and cargo not in CARGOS_POR_ROL[rol]:
         validos = ", ".join(sorted(c.value for c in CARGOS_POR_ROL[rol]))
         raise ErrorUsuario(400, f"El cargo {cargo.value} no corresponde al rol {rol.value}. Cargos válidos: {validos}")
+
+
+def _validar_dominio(email: str) -> None:
+    """La misma regla del login para todos los caminos que crean o cambian un correo."""
+    if email.split("@")[1] not in DOMINIOS_REGISTRO:
+        permitidos = ", ".join(f"@{d}" for d in sorted(DOMINIOS_REGISTRO))
+        raise ErrorUsuario(400, f"Solo se pueden registrar correos institucionales ({permitidos})")
 
 
 def _email_en_uso(db: Session, email: str, excepto_id: int | None = None) -> bool:
@@ -92,6 +100,7 @@ def _proteger_ultimo_admin(usuario: Usuario, admins_activos: int, rol_nuevo: Rol
 
 
 def crear(db: Session, datos: UsuarioCrear) -> Usuario:
+    _validar_dominio(datos.email)
     _validar_cargo(datos.rol, datos.cargo)
     if _email_en_uso(db, datos.email):
         raise ErrorUsuario(409, _EMAIL_DUPLICADO)
@@ -111,11 +120,10 @@ def crear(db: Session, datos: UsuarioCrear) -> Usuario:
 
 
 def registrar(db: Session, datos: RegistroCrear) -> Usuario:
-    """Auto-registro: siempre SOLICITANTE / ESTUDIANTE. Un ADMIN cambia el cargo después si hace falta."""
-    dominio = datos.email.split("@")[1]
-    if dominio not in DOMINIOS_REGISTRO:
-        permitidos = ", ".join(f"@{d}" for d in sorted(DOMINIOS_REGISTRO))
-        raise ErrorUsuario(400, f"Solo se pueden registrar correos institucionales ({permitidos})")
+    """Auto-registro: siempre SOLICITANTE / ESTUDIANTE. Un ADMIN cambia el cargo después si hace falta.
+
+    El dominio del correo lo valida crear(), igual que cuando el ADMIN crea el usuario.
+    """
     return crear(
         db,
         UsuarioCrear(
@@ -190,6 +198,9 @@ def obtener(db: Session, usuario_id: int, actual: Usuario) -> Usuario:
 
 def actualizar(db: Session, usuario_id: int, datos: UsuarioActualizar) -> Usuario:
     cambios = datos.model_dump(exclude_unset=True)
+    # Cambiar el correo no puede saltarse la regla del dominio
+    if "email" in cambios:
+        _validar_dominio(cambios["email"])
     usuario, admins_activos = _obtener_para_cambio(db, usuario_id)
 
     rol = cambios.get("rol", usuario.rol)
