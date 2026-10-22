@@ -1,0 +1,111 @@
+# Nombre del Flujo: Validar nombre de rama
+# Descripcion: Verifica que la rama de origen de un Pull Request cumpla la
+# convencion de nombres del proyecto (tipo/sprint-N/hu-descripcion). Si no la
+# cumple, el check falla y el PR no puede fusionarse a develop.
+# ==============================================================================
+name: Validar nombre de rama
+
+# ------------------------------------------------------------------------------
+# DISPARADORES (Triggers)
+# Solo corre en Pull Requests: es el punto donde se puede bloquear la fusion.
+# 'edited' se incluye para revalidar si alguien cambia la rama base del PR.
+# ------------------------------------------------------------------------------
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+    branches: [ main, develop, qa ]
+
+# ------------------------------------------------------------------------------
+# PERMISOS Y CONCURRENCIA
+# Permisos minimos: el flujo solo lee metadatos del PR.
+# Se cancela la corrida anterior del mismo PR para no gastar minutos.
+# ------------------------------------------------------------------------------
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: validar-nombre-rama-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+# ------------------------------------------------------------------------------
+# TRABAJOS (Jobs)
+# ------------------------------------------------------------------------------
+jobs:
+
+  # ============================================================================
+  # 1. validar-nombre-rama: aplica el patron de la convencion sobre el nombre
+  #    de la rama de origen (head). El nombre del job es el que se registra
+  #    como status check obligatorio en la proteccion de ramas.
+  # ============================================================================
+  validar-nombre-rama:
+    name: validar-nombre-rama
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Comprobar convencion de nombres
+        env:
+          RAMA: ${{ github.head_ref }}
+          RAMA_BASE: ${{ github.base_ref }}
+        run: |
+          # ----------------------------------------------------------------------
+          # Patron de la convencion oficial:
+          #   <tipo>/sprint-<n>/<hu>-<descripcion-corta>
+          # Tipos: feature, fix, docs, refactor, test, chore, hotfix
+          # Ramas exentas: main, develop, qa (integracion)
+          # Exclusivas de Lider Tecnico/DevOps: sync/*, deploy/*
+          # ----------------------------------------------------------------------
+          PATRON='^(main|develop|qa|(feature|fix|docs|refactor|test|chore|hotfix)/sprint-[0-9]+/[a-z0-9]+(-[a-z0-9]+)*|sync/[a-z0-9]+(-[a-z0-9]+)*|deploy/[a-z0-9]+(-[a-z0-9]+)*)$'
+
+          echo "Rama de origen : $RAMA"
+          echo "Rama destino   : $RAMA_BASE"
+          echo "Longitud       : ${#RAMA} caracteres"
+
+          # Validacion de longitud (la convencion pide 60 caracteres como maximo)
+          if [ "${#RAMA}" -gt 60 ]; then
+            echo "::error::El nombre de la rama supera los 60 caracteres (${#RAMA})."
+            exit 1
+          fi
+
+          if [[ "$RAMA" =~ $PATRON ]]; then
+            echo "::notice::El nombre de la rama cumple la convencion."
+            exit 0
+          fi
+
+          echo "::error::El nombre de la rama NO cumple la convencion del proyecto."
+          {
+            echo "### Nombre de rama no valido"
+            echo ""
+            echo "**Rama detectada:** \`$RAMA\`"
+            echo ""
+            echo "**Formato obligatorio:**"
+            echo ""
+            echo '```'
+            echo "<tipo>/sprint-<n>/<hu>-<descripcion-corta>"
+            echo '```'
+            echo ""
+            echo "**Ejemplos validos:**"
+            echo ""
+            echo '```'
+            echo "feature/sprint-2/hu-14-consultar-reservas-activas"
+            echo "fix/sprint-2/hu-07-calendario-etiqueta-semana"
+            echo "docs/sprint-2/readme-arquitectura"
+            echo '```'
+            echo ""
+            echo "**Reglas:**"
+            echo "- Tipos permitidos: \`feature\`, \`fix\`, \`docs\`, \`refactor\`, \`test\`, \`chore\`, \`hotfix\` (hotfix solo desde \`main\`)."
+            echo "- \`sync/\` y \`deploy/\` quedan reservados al Lider Tecnico/DevOps."
+            echo "- Minusculas, kebab-case, sin tildes ni enie, sin espacios, maximo 60 caracteres."
+            echo "- Una rama por historia de usuario o tarea."
+            echo ""
+            echo "**Como corregirlo:**"
+            echo ""
+            echo '```bash'
+            echo "git branch -m \"$RAMA\" feature/sprint-2/hu-XX-descripcion-corta"
+            echo "git push origin -u feature/sprint-2/hu-XX-descripcion-corta"
+            echo "git push origin --delete \"$RAMA\""
+            echo '```'
+            echo ""
+            echo "Luego abre el Pull Request desde la rama renombrada."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
