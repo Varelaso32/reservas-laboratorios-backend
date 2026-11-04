@@ -13,6 +13,25 @@ class SolicitudCrear(BaseModel):
     proposito: str = Field(min_length=1, max_length=500, description="Para qué se usará el espacio", examples=["Práctica de laboratorio de redes"])
     asistentes: int = Field(gt=0, description="Cantidad de personas", examples=[15])
     equipamiento: str | None = Field(default=None, max_length=500, description="Equipos requeridos (opcional)", examples=["Proyector y 15 computadores"])
+    tipo_uso_id: int | None = Field(
+        default=None,
+        description="Actividad de la reserva, del catálogo del espacio (HU-22, HU-29)",
+        examples=[3],
+    )
+    responsable_id: int | None = Field(
+        default=None,
+        description="Docente, coordinador o director responsable (HU-32). Obligatorio si el espacio lo exige",
+        examples=[4],
+    )
+    motivo_urgencia: str | None = Field(
+        default=None,
+        max_length=500,
+        description=(
+            "Motivo por el que se pide un horario ya ocupado (HU-30). Obligatorio cuando quien "
+            "solicita tiene mayor jerarquía que el titular del cupo"
+        ),
+        examples=["El jurado solo puede asistir a esa hora"],
+    )
 
     @field_validator("proposito")
     @classmethod
@@ -25,6 +44,13 @@ class SolicitudCrear(BaseModel):
     @field_validator("equipamiento")
     @classmethod
     def equipamiento_limpio(cls, valor: str | None) -> str | None:
+        if valor is None:
+            return None
+        return valor.strip() or None
+
+    @field_validator("motivo_urgencia")
+    @classmethod
+    def motivo_urgencia_limpio(cls, valor: str | None) -> str | None:
         if valor is None:
             return None
         return valor.strip() or None
