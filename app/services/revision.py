@@ -5,11 +5,13 @@ from sqlalchemy import exists, select
 from sqlalchemy.orm import Session, aliased
 
 from app.models.enums import EstadoSolicitud, Rol
-from app.models.modelos import Espacio, Solicitud, Usuario, espacio_aprobador
+from app.models.modelos import Espacio, Solicitud, TipoUso, Usuario, espacio_aprobador
+from app.services import reglas
 from app.utils.fechas import ZONA_COLOMBIA
 
 Solicitante = aliased(Usuario)
 Decisor = aliased(Usuario)
+Responsable = aliased(Usuario)
 
 
 def gestiona_espacio(espacio_id, aprobador_id: int):
@@ -24,7 +26,27 @@ def _local(fecha):
     return fecha.astimezone(ZONA_COLOMBIA) if fecha else None
 
 
-def _salida(sol: Solicitud, esp: Espacio, solicitante: Usuario) -> dict:
+# HU-12: etiqueta legible del nivel de prioridad (3 y 2 son alta jerarquía)
+ETIQUETAS_PRIORIDAD = {3: "ALTA", 2: "ALTA", 1: "MEDIA", 0: "BAJA"}
+
+
+def etiqueta_prioridad(prioridad: int) -> str:
+    return ETIQUETAS_PRIORIDAD.get(prioridad, "BAJA")
+
+
+def _fuera_de_franja(sol: Solicitud, esp: Espacio) -> bool:
+    inicio = sol.inicio.astimezone(ZONA_COLOMBIA)
+    fin = sol.fin.astimezone(ZONA_COLOMBIA)
+    return reglas.fuera_de_franja(esp, inicio.date(), inicio.time(), fin.time()) is not None
+
+
+def _salida(
+    sol: Solicitud,
+    esp: Espacio,
+    solicitante: Usuario,
+    tipo_uso: str | None = None,
+    responsable: str | None = None,
+) -> dict:
     return {
         "id": sol.id,
         "estado": sol.estado,
@@ -44,26 +66,35 @@ def _salida(sol: Solicitud, esp: Espacio, solicitante: Usuario) -> dict:
         "inicio": _local(sol.inicio),
         "fin": _local(sol.fin),
         "asistentes": sol.asistentes,
+        "tipo_uso": tipo_uso,
+        "responsable": responsable,
+        "fuera_de_franja": _fuera_de_franja(sol, esp),
         "creada_en": _local(sol.creada_en),
         "vencida": sol.inicio < datetime.now(ZONA_COLOMBIA),
+        "prioridad": sol.prioridad,
+        "prioridad_etiqueta": etiqueta_prioridad(sol.prioridad),
     }
 
 
 def listar_pendientes(db: Session, usuario: Usuario, espacio_id: int | None = None) -> list[dict]:
     """El APROBADOR ve las de sus espacios; el ADMIN las de todos, solo para consulta."""
     consulta = (
-        select(Solicitud, Espacio, Solicitante)
+        select(Solicitud, Espacio, Solicitante, TipoUso.nombre, Responsable.nombre)
         .join(Espacio, Espacio.id == Solicitud.espacio_id)
         .join(Solicitante, Solicitante.id == Solicitud.solicitante_id)
+        .outerjoin(TipoUso, TipoUso.id == Solicitud.tipo_uso_id)
+        .outerjoin(Responsable, Responsable.id == Solicitud.responsable_id)
         .where(Solicitud.estado == EstadoSolicitud.PENDIENTE)
     )
     if usuario.rol != Rol.ADMIN:
         consulta = consulta.where(gestiona_espacio(Solicitud.espacio_id, usuario.id))
     if espacio_id is not None:
         consulta = consulta.where(Solicitud.espacio_id == espacio_id)
-    # Primero las que se usan más pronto: son las más urgentes de decidir
-    filas = db.execute(consulta.order_by(Solicitud.inicio, Solicitud.id)).all()
-    return [_salida(s, e, u) for s, e, u in filas]
+    # HU-12: primero las de mayor prioridad; a igual prioridad, las más próximas
+    filas = db.execute(
+        consulta.order_by(Solicitud.prioridad.desc(), Solicitud.inicio, Solicitud.id)
+    ).all()
+    return [_salida(s, e, u, t, r) for s, e, u, t, r in filas]
 
 
 def listar_resueltas(
@@ -140,15 +171,17 @@ def listar_resueltas(
 def obtener_detalle(db: Session, usuario: Usuario, solicitud_id: int) -> dict | None:
     """Devuelve None si no existe o si el usuario no puede verla (así no se revela que existe)."""
     fila = db.execute(
-        select(Solicitud, Espacio, Solicitante, Decisor.nombre)
+        select(Solicitud, Espacio, Solicitante, Decisor.nombre, TipoUso.nombre, Responsable.nombre)
         .join(Espacio, Espacio.id == Solicitud.espacio_id)
         .join(Solicitante, Solicitante.id == Solicitud.solicitante_id)
         .outerjoin(Decisor, Decisor.id == Solicitud.decidido_por)
+        .outerjoin(TipoUso, TipoUso.id == Solicitud.tipo_uso_id)
+        .outerjoin(Responsable, Responsable.id == Solicitud.responsable_id)
         .where(Solicitud.id == solicitud_id)
     ).first()
     if fila is None:
         return None
-    sol, esp, solicitante, decisor_nombre = fila
+    sol, esp, solicitante, decisor_nombre, tipo_uso, responsable = fila
 
     if usuario.rol == Rol.ADMIN:
         permitido = True
@@ -159,7 +192,7 @@ def obtener_detalle(db: Session, usuario: Usuario, solicitud_id: int) -> dict | 
     if not permitido:
         return None
 
-    salida = _salida(sol, esp, solicitante)
+    salida = _salida(sol, esp, solicitante, tipo_uso, responsable)
     salida.update(
         {
             "proposito": sol.proposito,
