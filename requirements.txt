@@ -1,5 +1,6 @@
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
+alembic==1.20.1
 pydantic>=2.7.0
 pydantic-settings>=2.3.0
 sqlalchemy==2.0.54
@@ -7,3 +8,4 @@ psycopg[binary]==3.3.6
 pyjwt==2.14.0
 pwdlib[argon2]==0.3.1
 python-multipart==0.0.32
+reportlab==5.1.0
