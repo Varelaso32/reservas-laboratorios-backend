@@ -4,9 +4,14 @@ from datetime import date, datetime, time, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased
 
-from app.models.enums import AccionTrazabilidad, EstadoReserva, EstadoSolicitud, Rol
+from app.models.enums import (
+    AccionTrazabilidad,
+    EstadoReserva,
+    EstadoSolicitud,
+    Rol,
+)
 from app.models.modelos import Espacio, Reserva, Solicitud, Usuario
-from app.services import trazabilidad
+from app.services import asistencia, recursos, sanciones, trazabilidad
 from app.services.revision import gestiona_espacio
 from app.utils.fechas import ZONA_COLOMBIA
 
@@ -27,7 +32,8 @@ def _local(fecha):
     return fecha.astimezone(ZONA_COLOMBIA) if fecha else None
 
 
-def _resumen(reserva: Reserva, espacio: Espacio) -> dict:
+def _resumen(reserva: Reserva, espacio: Espacio, tolerancia_minutos: int = 10) -> dict:
+    ahora = datetime.now(ZONA_COLOMBIA)
     return {
         "id": reserva.id,
         "estado": reserva.estado,
@@ -41,14 +47,21 @@ def _resumen(reserva: Reserva, espacio: Espacio) -> dict:
         "inicio": _local(reserva.inicio),
         "fin": _local(reserva.fin),
         "solicitud_id": reserva.solicitud_id,
+        "estado_asistencia": reserva.estado_asistencia,
+        "inicio_efectivo": _local(reserva.inicio_efectivo),
+        "tolerancia_hasta": _local(asistencia.tolerancia_hasta(reserva, tolerancia_minutos)),
+        "puede_registrar_asistencia": asistencia.puede_registrar(
+            reserva, ahora, tolerancia_minutos
+        ),
+        "motivo_cancelacion": reserva.motivo_cancelacion,
     }
 
 
-def cancelar(db: Session, usuario: Usuario, reserva_id: int) -> dict:
-    """Cancela una reserva propia que todavía no ha comenzado.
+def cancelar(db: Session, usuario: Usuario, reserva_id: int, motivo: str) -> dict:
+    """Cancela una reserva propia que todavía no ha comenzado (HU-16, HU-17).
 
-    La operación es idempotente: una reserva ya cancelada se devuelve sin crear
-    otra acción de historial.
+    El motivo queda asociado a la reserva y en el historial. La operación es
+    idempotente: una reserva ya cancelada se devuelve sin duplicar el registro.
     """
     reserva = db.scalar(
         select(Reserva).where(Reserva.id == reserva_id).with_for_update()
@@ -57,8 +70,11 @@ def cancelar(db: Session, usuario: Usuario, reserva_id: int) -> dict:
         raise ErrorReserva(404, "La reserva no existe o no tienes acceso a ella")
 
     espacio = db.get(Espacio, reserva.espacio_id)
+    tolerancia = sanciones.obtener_parametros(db).tolerancia_minutos
     if reserva.estado == EstadoReserva.CANCELADA:
-        return _resumen(reserva, espacio)
+        return _resumen(reserva, espacio, tolerancia)
+    if reserva.estado == EstadoReserva.NO_ASISTIO:
+        raise ErrorReserva(409, "La reserva quedó como no-show y no se puede cancelar")
 
     if reserva.inicio <= datetime.now(ZONA_COLOMBIA):
         raise ErrorReserva(409, "No se puede cancelar una reserva que ya inició")
@@ -70,6 +86,7 @@ def cancelar(db: Session, usuario: Usuario, reserva_id: int) -> dict:
         raise ErrorReserva(409, "La solicitud asociada a la reserva no existe")
 
     reserva.estado = EstadoReserva.CANCELADA
+    reserva.motivo_cancelacion = motivo
     solicitud.estado = EstadoSolicitud.CANCELADA
     trazabilidad.registrar(
         db,
@@ -79,10 +96,12 @@ def cancelar(db: Session, usuario: Usuario, reserva_id: int) -> dict:
         accion=AccionTrazabilidad.CANCELADA,
         estado_anterior=EstadoSolicitud.APROBADA.value,
         estado_nuevo=EstadoSolicitud.CANCELADA.value,
-        detalle=f"Reserva #{reserva.id} cancelada por el solicitante",
+        detalle=f"Reserva #{reserva.id} cancelada por el solicitante. Motivo: {motivo}",
     )
+    # HU-44, criterio 7: las solicitudes de recursos de la reserva se cancelan
+    recursos.cancelar_por_reserva(db, reserva.id, "La reserva de espacio fue cancelada")
     db.commit()
-    return _resumen(reserva, espacio)
+    return _resumen(reserva, espacio, tolerancia)
 
 
 def listar_agenda(
@@ -115,9 +134,10 @@ def listar_agenda(
         consulta = consulta.where(Reserva.espacio_id == espacio_id)
 
     filas = db.execute(consulta.order_by(Reserva.inicio, Reserva.espacio_id, Reserva.id)).all()
+    tolerancia = sanciones.obtener_parametros(db).tolerancia_minutos
     salida = []
     for reserva, espacio, solicitud, titular in filas:
-        item = _resumen(reserva, espacio)
+        item = _resumen(reserva, espacio, tolerancia)
         item.update(
             {"titular": titular, "proposito": solicitud.proposito, "asistentes": solicitud.asistentes}
         )
@@ -133,6 +153,9 @@ def listar_activas(db: Session, usuario: Usuario, incluir_canceladas: bool = Fal
     Las que ya pasaron nunca aparecen.
     """
     ahora = datetime.now(ZONA_COLOMBIA)
+    # HU-39: al consultar se ponen al día las advertencias y los no-show
+    asistencia.procesar_vencidas(db, ahora)
+    tolerancia = sanciones.obtener_parametros(db).tolerancia_minutos
     filtros = [Reserva.usuario_id == usuario.id, Reserva.fin > ahora]
     if not incluir_canceladas:
         filtros.append(Reserva.estado == EstadoReserva.ACTIVA)
@@ -142,7 +165,7 @@ def listar_activas(db: Session, usuario: Usuario, incluir_canceladas: bool = Fal
         .where(*filtros)
         .order_by(Reserva.inicio, Reserva.id)
     ).all()
-    return [_resumen(r, e) for r, e in filas]
+    return [_resumen(r, e, tolerancia) for r, e in filas]
 
 
 def obtener_detalle(db: Session, usuario: Usuario, reserva_id: int) -> dict | None:
@@ -168,7 +191,7 @@ def obtener_detalle(db: Session, usuario: Usuario, reserva_id: int) -> dict | No
     if not permitido:
         return None
 
-    salida = _resumen(reserva, espacio)
+    salida = _resumen(reserva, espacio, sanciones.obtener_parametros(db).tolerancia_minutos)
     salida.update(
         {
             "finalizada": reserva.fin <= datetime.now(ZONA_COLOMBIA),

@@ -8,8 +8,14 @@ from app.api.deps import get_usuario_actual, requiere_rol
 from app.core.database import get_db
 from app.models.enums import Rol
 from app.models.modelos import Usuario
-from app.schemas.reserva import ReservaAgendaOut, ReservaDetalleOut, ReservaResumenOut
-from app.services import reservas
+from app.schemas.reserva import (
+    CancelacionIn,
+    ReservaAgendaOut,
+    ReservaDetalleOut,
+    ReservaResumenOut,
+)
+from app.schemas.sancion import AsistenciaOut
+from app.services import asistencia, reservas
 from app.utils.fechas import ZONA_COLOMBIA
 
 router = APIRouter()
@@ -93,27 +99,60 @@ def mis_reservas(
     response_model=ReservaResumenOut,
     summary="Cancelar una reserva propia",
     description=(
-        "Cancela una reserva del usuario SOLICITANTE que todavía no haya iniciado. "
-        "La reserva y su solicitud quedan en estado CANCELADA, y se registra la acción "
-        "en el historial. Si ya estaba cancelada, devuelve su estado actual sin duplicar "
-        "el registro de historial. Las reservas que ya iniciaron no se pueden cancelar."
+        "**HU-16 y HU-17.** Cancela una reserva del usuario SOLICITANTE que todavía no haya "
+        "iniciado, registrando el motivo indicado. La reserva y su solicitud quedan en estado "
+        "CANCELADA, y se registra la acción en el historial con el motivo. Si ya estaba "
+        "cancelada, devuelve su estado actual sin duplicar el registro. Las reservas que ya "
+        "iniciaron o quedaron como no-show no se pueden cancelar."
     ),
-    response_description="Reserva con estado CANCELADA",
+    response_description="Reserva con estado CANCELADA y el motivo registrado",
     responses={
         401: {"description": "No autenticado"},
         403: {"description": "Solo para usuarios SOLICITANTE"},
         404: {"description": "La reserva no existe o no te pertenece"},
-        409: {"description": "La reserva ya inició o su solicitud asociada no existe"},
+        409: {"description": "La reserva ya inició, quedó como no-show o no tiene solicitud"},
+        422: {"description": "Falta el motivo o es demasiado corto"},
     },
 )
 def cancelar_reserva(
+    reserva_id: int,
+    datos: CancelacionIn,
+    usuario: Usuario = Depends(requiere_rol(Rol.SOLICITANTE)),
+    db: Session = Depends(get_db),
+):
+    try:
+        return reservas.cancelar(db, usuario, reserva_id, datos.motivo)
+    except reservas.ErrorReserva as error:
+        db.rollback()
+        raise HTTPException(status_code=error.codigo, detail=error.mensaje) from error
+
+
+@router.post(
+    "/{reserva_id}/asistencia",
+    response_model=AsistenciaOut,
+    summary="Registrar la asistencia a una reserva",
+    description=(
+        "**HU-38.** El titular registra que asistió al espacio. Solo se puede entre la hora "
+        "de inicio y el vencimiento de la tolerancia configurada (HU-41); después la reserva "
+        "queda como no-show y el espacio se libera (HU-39). Una vez registrada, la asistencia "
+        "no se puede modificar. Cada registro queda en el historial (HU-24)."
+    ),
+    response_description="Estado de asistencia de la reserva",
+    responses={
+        401: {"description": "No autenticado"},
+        403: {"description": "Solo para usuarios SOLICITANTE"},
+        404: {"description": "La reserva no existe o no te pertenece"},
+        409: {"description": "La reserva aún no inicia, venció la tolerancia o está cancelada"},
+    },
+)
+def registrar_asistencia(
     reserva_id: int,
     usuario: Usuario = Depends(requiere_rol(Rol.SOLICITANTE)),
     db: Session = Depends(get_db),
 ):
     try:
-        return reservas.cancelar(db, usuario, reserva_id)
-    except reservas.ErrorReserva as error:
+        return asistencia.registrar(db, usuario, reserva_id)
+    except asistencia.ErrorAsistencia as error:
         db.rollback()
         raise HTTPException(status_code=error.codigo, detail=error.mensaje) from error
 
