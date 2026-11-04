@@ -11,6 +11,7 @@ from app.api.v1.endpoints import (
     notificaciones,
     recursos,
     registro,
+    reportes,
     reservas,
     revision,
     sanciones,
@@ -35,3 +36,4 @@ api_router.include_router(configuracion.router, prefix="/configuracion", tags=["
 api_router.include_router(notificaciones.router, prefix="/notificaciones", tags=["notificaciones"])
 api_router.include_router(recursos.router, prefix="/recursos", tags=["recursos"])
 api_router.include_router(sanciones.router, prefix="/sanciones", tags=["sanciones"])
+api_router.include_router(reportes.router, prefix="/reportes", tags=["reportes"])
