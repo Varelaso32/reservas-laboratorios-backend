@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models.enums import EstadoReserva, EstadoSolicitud, TipoEspacio
 from app.models.modelos import Espacio, Reserva, Solicitud
+from app.services import reglas
 from app.utils.fechas import ZONA_COLOMBIA
 
 
@@ -54,7 +55,10 @@ def listar_espacios(db: Session, tipo: TipoEspacio | None = None) -> list[Espaci
 def listar_disponibles(
     db: Session, inicio: datetime, fin: datetime, tipo: TipoEspacio | None = None
 ) -> list[Espacio]:
-    """Espacios sin reserva activa ni solicitud pendiente que se cruce: lo que de verdad se puede pedir."""
+    """Espacios libres: sin reserva activa ni solicitud pendiente que se cruce.
+
+    Además se descartan los que están fuera de su franja de operación (HU-21.4).
+    """
     consulta = select(Espacio).where(
         Espacio.activo.is_(True),
         ~_ocupado(Espacio.id, inicio, fin),
@@ -62,7 +66,15 @@ def listar_disponibles(
     )
     if tipo is not None:
         consulta = consulta.where(Espacio.tipo == tipo)
-    return list(db.scalars(consulta.order_by(Espacio.tipo, Espacio.nombre)))
+    espacios = db.scalars(consulta.order_by(Espacio.tipo, Espacio.nombre))
+    fecha = inicio.astimezone(ZONA_COLOMBIA).date()
+    hora_inicio = inicio.astimezone(ZONA_COLOMBIA).time()
+    hora_fin = fin.astimezone(ZONA_COLOMBIA).time()
+    return [
+        espacio
+        for espacio in espacios
+        if reglas.fuera_de_franja(espacio, fecha, hora_inicio, hora_fin) is None
+    ]
 
 
 def esta_disponible(db: Session, espacio_id: int, inicio: datetime, fin: datetime) -> bool:

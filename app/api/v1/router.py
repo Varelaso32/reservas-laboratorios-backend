@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     auth,
+    configuracion,
     decision,
     disponibilidad_espacio,
     espacios,
@@ -28,4 +29,5 @@ api_router.include_router(reservas.router, prefix="/reservas", tags=["reservas"]
 api_router.include_router(historial.router, tags=["historial"])
 api_router.include_router(usuarios.router, prefix="/usuarios", tags=["Usuarios"])
 api_router.include_router(registro.router, prefix="/auth", tags=["auth"])
+api_router.include_router(configuracion.router, prefix="/configuracion", tags=["configuración"])
 api_router.include_router(notificaciones.router, prefix="/notificaciones", tags=["notificaciones"])
