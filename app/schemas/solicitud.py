@@ -65,7 +65,17 @@ class SolicitudOut(BaseModel):
     proposito: str = Field(description="Propósito de la reserva")
     asistentes: int = Field(description="Cantidad de asistentes")
     equipamiento: str | None = Field(description="Equipos requeridos")
-    estado: EstadoSolicitud = Field(description="PENDIENTE, APROBADA, RECHAZADA o CANCELADA")
+    estado: EstadoSolicitud = Field(
+        description="PENDIENTE, PENDIENTE_AUTORIZACION, APROBADA, RECHAZADA, CANCELADA o EN_ESPERA_CESION"
+    )
+    tipo_uso: str | None = Field(description="Actividad declarada (HU-29)")
+    responsable: str | None = Field(description="Nombre del responsable de la actividad (HU-32)")
+    fuera_de_franja: bool = Field(
+        description="true si el horario no cabe en la franja de operación del espacio"
+    )
+    motivo_urgencia: str | None = Field(
+        default=None, description="Motivo con el que se pidió un cupo ya ocupado (HU-30)"
+    )
     motivo_rechazo: str | None = Field(description="Motivo, si fue rechazada")
     fecha_decision: datetime | None = Field(description="Cuándo se aprobó o rechazó")
     creada_en: datetime = Field(description="Cuándo se registró la solicitud")
@@ -73,6 +83,14 @@ class SolicitudOut(BaseModel):
 
 class SolicitudCreadaOut(SolicitudOut):
     mensaje: str = Field(description="Confirmación para el solicitante", examples=["Solicitud registrada. Quedó en estado PENDIENTE."])
+    avisos: list[str] = Field(
+        default_factory=list,
+        description="Advertencias de las reglas del espacio, por ejemplo la autorización especial",
+    )
+    titular: str | None = Field(
+        default=None,
+        description="Nombre del titular del cupo cuando hubo conflicto de jerarquía (HU-30)",
+    )
 
 
 class DisponibilidadOut(BaseModel):
