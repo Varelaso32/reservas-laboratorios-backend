@@ -11,6 +11,10 @@ class UsuarioOut(BaseModel):
     email: str = Field(description="Correo", examples=["estudiante@reservas.test"])
     rol: Rol = Field(description="SOLICITANTE, APROBADOR o ADMIN")
     cargo: Cargo | None = Field(description="Cargo dentro de la institución")
+    puede_autorizar_especial: bool = Field(
+        default=False,
+        description="Permiso para decidir solicitudes fuera de la franja de operación (HU-35)",
+    )
 
 
 class TokenOut(BaseModel):

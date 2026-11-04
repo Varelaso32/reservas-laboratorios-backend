@@ -62,6 +62,9 @@ class UsuarioCrear(BaseModel):
     )
     rol: Rol = Field(description="SOLICITANTE, APROBADOR o ADMIN")
     cargo: Cargo | None = Field(None, description="Debe corresponder al rol. Opcional")
+    puede_autorizar_especial: bool = Field(
+        False, description="Permiso para decidir solicitudes fuera de la franja (HU-35)"
+    )
 
     _nombre = field_validator("nombre")(_normalizar_nombre)
     _email = field_validator("email")(normalizar_email)
@@ -105,6 +108,10 @@ class UsuarioActualizar(BaseModel):
     email: str | None = Field(None, max_length=EMAIL_MAX + 50, description="Correo nuevo")
     rol: Rol | None = Field(None, description="SOLICITANTE, APROBADOR o ADMIN")
     cargo: Cargo | None = Field(None, description="Cargo. Se puede enviar null para quitarlo")
+    puede_autorizar_especial: bool | None = Field(
+        None,
+        description="Permiso para decidir solicitudes fuera de la franja de operación (HU-35)",
+    )
 
     @field_validator("nombre", "email", "rol", mode="before")
     @classmethod
@@ -129,6 +136,65 @@ class UsuarioEstadoActualizar(BaseModel):
     model_config = ConfigDict(extra="forbid", json_schema_extra={"example": {"activo": False}})
 
     activo: bool = Field(description="false desactiva al usuario (borrado lógico); true lo reactiva")
+
+
+class MiCuentaActualizar(BaseModel):
+    """Lo que cada usuario puede cambiar de sí mismo: nombre y correo, nada más.
+
+    El rol y el cargo los fija el ADMIN con PATCH /usuarios/{id}; la clave tiene
+    su propia operación porque se confirma con la clave actual.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={"example": {"nombre": "Laura Gómez Restrepo"}},
+    )
+
+    nombre: str | None = Field(
+        None, max_length=NOMBRE_MAX, description="Nombre nuevo. Opcional: solo se cambia si se envía"
+    )
+    email: str | None = Field(
+        None, max_length=EMAIL_MAX + 50, description="Correo nuevo. Opcional: solo se cambia si se envía"
+    )
+
+    @field_validator("nombre", "email", mode="before")
+    @classmethod
+    def _sin_null(cls, valor):
+        # Son columnas NOT NULL: un null explícito se rechaza con 422 en lugar de un 500
+        if valor is None:
+            raise ValueError("Este campo no puede ser null; si no quieres cambiarlo, no lo envíes")
+        return valor
+
+    @field_validator("nombre")
+    @classmethod
+    def _nombre(cls, valor: str) -> str:
+        return _normalizar_nombre(valor)
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, valor: str) -> str:
+        return normalizar_email(valor)
+
+
+class MiClaveActualizar(BaseModel):
+    """Restablecimiento de la propia clave: exige la clave vigente."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={"example": {"clave_actual": "Laboratorio2026*", "clave_nueva": "NuevaClave2026*"}},
+    )
+
+    clave_actual: str = Field(
+        min_length=1, max_length=CLAVE_MAX, description="Clave vigente, para confirmar que eres tú"
+    )
+    clave_nueva: str = Field(
+        min_length=CLAVE_MIN, max_length=CLAVE_MAX,
+        description=f"Clave nueva de {CLAVE_MIN} a {CLAVE_MAX} caracteres. Se guarda solo el hash",
+    )
+
+
+class ResultadoCambioOut(BaseModel):
+    mensaje: str = Field(description="Resultado de la operación")
 
 
 class UsuarioDetalleOut(BaseModel):
@@ -156,6 +222,9 @@ class UsuarioDetalleOut(BaseModel):
     rol: Rol = Field(description="SOLICITANTE, APROBADOR o ADMIN")
     cargo: Cargo | None = Field(description="Cargo dentro de la institución")
     activo: bool = Field(description="false si fue desactivado")
+    puede_autorizar_especial: bool = Field(
+        default=False, description="Puede decidir solicitudes fuera de la franja (HU-35)"
+    )
     creado_en: datetime = Field(description="Fecha de creación, en hora de Colombia")
 
     @field_validator("creado_en")
