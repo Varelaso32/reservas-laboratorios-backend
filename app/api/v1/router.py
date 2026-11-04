@@ -9,6 +9,7 @@ from app.api.v1.endpoints import (
     historial,
     items,
     notificaciones,
+    recursos,
     registro,
     reservas,
     revision,
@@ -31,3 +32,4 @@ api_router.include_router(usuarios.router, prefix="/usuarios", tags=["Usuarios"]
 api_router.include_router(registro.router, prefix="/auth", tags=["auth"])
 api_router.include_router(configuracion.router, prefix="/configuracion", tags=["configuración"])
 api_router.include_router(notificaciones.router, prefix="/notificaciones", tags=["notificaciones"])
+api_router.include_router(recursos.router, prefix="/recursos", tags=["recursos"])
