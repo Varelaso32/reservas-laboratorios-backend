@@ -1,5 +1,6 @@
 """Pruebas de las utilidades de arranque (migraciones y recreación de la base)."""
 
+from app.utils.arranque import recrear_solicitado
 from app.utils.migrar import es_base_anterior, esta_contaminada
 from app.utils.recrear_bd import al_dia, confirmado
 
@@ -27,6 +28,17 @@ def test_base_limpia_o_versionada_no_esta_contaminada():
     assert esta_contaminada(BASE) is False
     assert esta_contaminada({*BASE, "tipo_uso", "alembic_version"}) is False
     assert esta_contaminada(set()) is False
+
+
+def test_recrear_solicitado_acepta_variantes_de_la_variable():
+    assert recrear_solicitado("si") is True
+    assert recrear_solicitado("Si") is True
+    assert recrear_solicitado("SI") is True
+    assert recrear_solicitado(" sí ") is True
+    assert recrear_solicitado("true") is True
+    assert recrear_solicitado("1") is True
+    assert recrear_solicitado(None) is False
+    assert recrear_solicitado("no") is False
 
 
 def test_recrear_exige_confirmacion_explicita():
