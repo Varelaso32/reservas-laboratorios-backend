@@ -33,11 +33,10 @@ EXPOSE 8000
 
 # Arranque en cualquier entorno:
 # - $PORT: Render (u otro PaaS) inyecta el puerto; local se usa 8000.
-# - arranque: si RECREAR_BD es afirmativo (si/sí/true/1) y la base no está en
-#   head, la recrea y siembra datos de prueba (QA); después aplica Alembic.
-# - crear_tablas: idempotente (tablas + btree_gist + trigger de trazabilidad).
+# - arranque: aplica las migraciones de Alembic (adoptando esquemas viejos) y
+#   verifica que el esquema quedó completo. Es el ÚNICO que crea o modifica
+#   tablas: `crear_tablas` ya no corre aquí para no dejar tablas sin versionar.
 # - crear_admin: solo si las tres variables ADMIN_* están definidas.
 CMD python -m app.utils.arranque \
-    && python -m app.utils.crear_tablas \
     && if [ -n "$ADMIN_EMAIL" ] && [ -n "$ADMIN_NOMBRE" ] && [ -n "$ADMIN_CLAVE" ]; then python -m app.utils.crear_admin || echo "crear_admin fallo (no bloquea el arranque)"; fi \
     && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
