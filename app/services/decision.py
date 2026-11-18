@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.models.enums import AccionTrazabilidad, EstadoReserva, EstadoSolicitud, Rol
 from app.models.modelos import Espacio, Reserva, Solicitud, Usuario
-from app.services import disponibilidad, revision, trazabilidad
+from app.services import disponibilidad, notificaciones, revision, trazabilidad
 from app.utils.fechas import ZONA_COLOMBIA
 
 
@@ -94,6 +94,9 @@ def aprobar(db: Session, aprobador: Usuario, solicitud_id: int) -> dict:
         estado_nuevo=EstadoSolicitud.APROBADA.value,
         detalle=f"Reserva #{reserva.id} generada",
     )
+    # La campana deja de pedir revisión y el solicitante se entera del resultado
+    notificaciones.descartar_previos(db, solicitud.id)
+    notificaciones.notificar_aprobada(db, solicitud, espacio, reserva.id)
     db.commit()
 
     return {
@@ -130,6 +133,9 @@ def rechazar(db: Session, aprobador: Usuario, solicitud_id: int, motivo: str) ->
         estado_nuevo=EstadoSolicitud.RECHAZADA.value,
         detalle=motivo,
     )
+    espacio = db.get(Espacio, solicitud.espacio_id)
+    notificaciones.descartar_previos(db, solicitud.id)
+    notificaciones.notificar_rechazada(db, solicitud, espacio, motivo)
     db.commit()
 
     return {

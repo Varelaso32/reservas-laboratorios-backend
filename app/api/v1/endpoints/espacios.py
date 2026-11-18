@@ -53,7 +53,8 @@ def crear_espacio(
     usuario: Usuario = Depends(requiere_rol(Rol.ADMIN, Rol.APROBADOR)),
     db: Session = Depends(get_db),
 ):
-    return _ejecutar(db, gestion_espacios.crear, usuario, datos)
+    espacio = _ejecutar(db, gestion_espacios.crear, usuario, datos)
+    return gestion_espacios.salida_admin(db, espacio)
 
 
 @router.get(
@@ -74,7 +75,10 @@ def listar_espacios_admin(
     usuario: Usuario = Depends(requiere_rol(Rol.ADMIN, Rol.APROBADOR)),
     db: Session = Depends(get_db),
 ):
-    return gestion_espacios.listar_admin(db, usuario)
+    return [
+        gestion_espacios.salida_admin(db, espacio)
+        for espacio in gestion_espacios.listar_admin(db, usuario)
+    ]
 
 
 @router.patch(
@@ -102,7 +106,8 @@ def actualizar_espacio(
     usuario: Usuario = Depends(requiere_rol(Rol.ADMIN, Rol.APROBADOR)),
     db: Session = Depends(get_db),
 ):
-    return _ejecutar(db, gestion_espacios.actualizar, usuario, espacio_id, datos)
+    espacio = _ejecutar(db, gestion_espacios.actualizar, usuario, espacio_id, datos)
+    return gestion_espacios.salida_admin(db, espacio)
 
 
 @router.patch(
@@ -128,7 +133,8 @@ def cambiar_estado_espacio(
     usuario: Usuario = Depends(requiere_rol(Rol.ADMIN, Rol.APROBADOR)),
     db: Session = Depends(get_db),
 ):
-    return _ejecutar(db, gestion_espacios.cambiar_estado, usuario, espacio_id, datos.activo)
+    espacio = _ejecutar(db, gestion_espacios.cambiar_estado, usuario, espacio_id, datos.activo)
+    return gestion_espacios.salida_admin(db, espacio)
 
 
 @router.get(

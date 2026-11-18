@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.models.enums import EstadoReserva, Rol
 from app.models.modelos import Espacio, Reserva, Solicitud, Usuario, espacio_aprobador
 from app.schemas.espacio import EspacioActualizar, EspacioCrear
+from app.services import recursos as catalogo_recursos
 from app.services.revision import gestiona_espacio
 from app.utils.fechas import ZONA_COLOMBIA
 
@@ -78,15 +79,20 @@ def crear(db: Session, usuario: Usuario, datos: EspacioCrear) -> Espacio:
     """HU-19: registra un espacio nuevo y activo.
 
     Si lo crea un APROBADOR, queda asignado como su aprobador para que pueda
-    gestionarlo. Si lo crea un ADMIN, queda sin aprobadores.
+    gestionarlo. Si lo crea un ADMIN, queda sin aprobadores. Las amenidades
+    indicadas se instalan descontando una unidad del stock de cada recurso.
     """
     if _nombre_en_uso(db, datos.nombre):
         raise ErrorEspacio(409, _NOMBRE_DUPLICADO)
-    espacio = Espacio(**datos.model_dump(), activo=True)
+    espacio = Espacio(**datos.model_dump(exclude={"amenidades"}), activo=True)
     db.add(espacio)
+    db.flush()
     if usuario.rol == Rol.APROBADOR:
-        db.flush()
         db.execute(espacio_aprobador.insert().values(espacio_id=espacio.id, usuario_id=usuario.id))
+    try:
+        catalogo_recursos.aplicar_amenidades(db, espacio, datos.amenidades, usuario.id)
+    except catalogo_recursos.ErrorRecurso as error:
+        raise ErrorEspacio(error.codigo, error.mensaje) from error
     return _guardar(db, espacio)
 
 
@@ -105,6 +111,7 @@ def actualizar(db: Session, usuario: Usuario, espacio_id: int, datos: EspacioAct
     espacio = _tomar_gestionable(db, usuario, espacio_id)
 
     cambios = datos.model_dump(exclude_unset=True)
+    amenidades = cambios.pop("amenidades", None)
     if "nombre" in cambios and _nombre_en_uso(db, cambios["nombre"], espacio.id):
         raise ErrorEspacio(409, _NOMBRE_DUPLICADO)
 
@@ -128,7 +135,26 @@ def actualizar(db: Session, usuario: Usuario, espacio_id: int, datos: EspacioAct
 
     for campo, valor in cambios.items():
         setattr(espacio, campo, valor)
+    db.flush()
+    if amenidades is not None:
+        try:
+            catalogo_recursos.aplicar_amenidades(db, espacio, amenidades, usuario.id)
+        except catalogo_recursos.ErrorRecurso as error:
+            raise ErrorEspacio(error.codigo, error.mensaje) from error
     return _guardar(db, espacio)
+
+
+def salida_admin(db: Session, espacio: Espacio) -> dict:
+    """Espacio con sus amenidades instaladas, para las respuestas administrativas."""
+    return {
+        "id": espacio.id,
+        "nombre": espacio.nombre,
+        "tipo": espacio.tipo,
+        "capacidad": espacio.capacidad,
+        "ubicacion": espacio.ubicacion,
+        "activo": espacio.activo,
+        "amenidades": catalogo_recursos.amenidades_de_espacio(db, espacio.id),
+    }
 
 
 def cambiar_estado(db: Session, usuario: Usuario, espacio_id: int, activo: bool) -> Espacio:

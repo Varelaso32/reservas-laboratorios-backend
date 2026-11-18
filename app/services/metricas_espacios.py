@@ -1,4 +1,4 @@
-"""Métricas de reservas por espacio dentro del horario institucional (todos los días)."""
+"""Métricas de reservas por espacio dentro de su franja de operación (HU-21, HU-36)."""
 from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import select
@@ -6,10 +6,21 @@ from sqlalchemy.orm import Session
 
 from app.models.enums import EstadoReserva
 from app.models.modelos import Reserva, Usuario
+from app.services import reglas
 from app.services.espacios import visibles_para
-from app.utils.fechas import HORA_APERTURA, HORA_CIERRE, ZONA_COLOMBIA
+from app.utils.fechas import ZONA_COLOMBIA
 
-MINUTOS_DIA_OPERATIVO = (HORA_CIERRE.hour - HORA_APERTURA.hour) * 60
+
+def _franja_del_dia(espacio, fecha: date) -> tuple[datetime, datetime] | None:
+    """Rango operativo del espacio en esa fecha, o None si ese día no opera."""
+    dias = reglas.dias_de(espacio)
+    if dias and fecha.isoweekday() not in dias:
+        return None
+    apertura, cierre = reglas.franja_de(espacio)
+    return (
+        datetime.combine(fecha, apertura, ZONA_COLOMBIA),
+        datetime.combine(fecha, cierre, ZONA_COLOMBIA),
+    )
 
 
 def listar_por_fecha(db: Session, usuario: Usuario, fecha: date) -> list[dict]:
@@ -29,22 +40,29 @@ def listar_por_fecha(db: Session, usuario: Usuario, fecha: date) -> list[dict]:
         .order_by(Reserva.espacio_id, Reserva.inicio, Reserva.id)
     ).all()
 
-    horario_apertura = datetime.combine(fecha, HORA_APERTURA, ZONA_COLOMBIA)
-    horario_cierre = datetime.combine(fecha, HORA_CIERRE, ZONA_COLOMBIA)
     acumulados: dict[int, dict[str, float | int]] = {}
-
-    for espacio_id, inicio, fin in filas:
+    for espacio_id, _, _ in filas:
         metricas = acumulados.setdefault(espacio_id, {"reservas_dia": 0, "minutos_reservados": 0.0})
         metricas["reservas_dia"] += 1
-        inicio_ocupado = max(inicio, horario_apertura)
-        fin_ocupado = min(fin, horario_cierre)
-        if fin_ocupado > inicio_ocupado:
-            metricas["minutos_reservados"] += (fin_ocupado - inicio_ocupado).total_seconds() / 60
 
     salida = []
     for espacio in espacios:
         metricas = acumulados.get(espacio.id, {"reservas_dia": 0, "minutos_reservados": 0.0})
-        disponibles = MINUTOS_DIA_OPERATIVO if espacio.activo else 0
+        franja = _franja_del_dia(espacio, fecha) if espacio.activo else None
+
+        if franja is not None:
+            apertura, cierre = franja
+            for espacio_id, inicio, fin in filas:
+                if espacio_id != espacio.id:
+                    continue
+                inicio_ocupado = max(inicio, apertura)
+                fin_ocupado = min(fin, cierre)
+                if fin_ocupado > inicio_ocupado:
+                    metricas["minutos_reservados"] += (fin_ocupado - inicio_ocupado).total_seconds() / 60
+            disponibles = int((cierre - apertura).total_seconds() / 60)
+        else:
+            disponibles = 0
+
         reservados = round(float(metricas["minutos_reservados"]), 2)
         salida.append(
             {

@@ -6,10 +6,16 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.security import hash_clave
+from app.core.security import hash_clave, verificar_clave
 from app.models.enums import Cargo, EstadoReserva, Rol
 from app.models.modelos import Reserva, Usuario
-from app.schemas.usuario import RegistroCrear, UsuarioActualizar, UsuarioCrear
+from app.schemas.usuario import (
+    MiClaveActualizar,
+    MiCuentaActualizar,
+    RegistroCrear,
+    UsuarioActualizar,
+    UsuarioCrear,
+)
 from app.utils.fechas import ZONA_COLOMBIA
 
 # Cargos válidos para cada rol (los mismos que usan los datos de prueba)
@@ -111,6 +117,7 @@ def crear(db: Session, datos: UsuarioCrear) -> Usuario:
         clave_hash=hash_clave(datos.clave),
         rol=datos.rol,
         cargo=datos.cargo,
+        puede_autorizar_especial=datos.puede_autorizar_especial,
     )
     db.add(usuario)
     _guardar(db)
@@ -177,6 +184,7 @@ def listar(db: Session, skip: int, limit: int, rol: Rol | None, activo: bool | N
             "rol": usuario.rol,
             "cargo": usuario.cargo,
             "activo": usuario.activo,
+            "puede_autorizar_especial": usuario.puede_autorizar_especial,
             "creado_en": usuario.creado_en,
             "reservas_mes": reservas,
         }
@@ -229,3 +237,42 @@ def cambiar_estado(db: Session, usuario_id: int, activo: bool) -> Usuario:
     db.commit()
     db.refresh(usuario)
     return usuario
+
+
+# --- Configuración de la propia cuenta ------------------------------------ #
+
+
+def actualizar_mi_cuenta(db: Session, actual: Usuario, datos: MiCuentaActualizar) -> Usuario:
+    """El usuario cambia su nombre o correo. Rol y cargo no se tocan aquí."""
+    # Bloquea la fila: si el mismo usuario guarda desde dos pestañas, la segunda
+    # espera y ya ve los cambios de la primera.
+    usuario = db.scalar(select(Usuario).where(Usuario.id == actual.id).with_for_update())
+    if usuario is None:
+        raise ErrorUsuario(404, _NO_ENCONTRADO)
+
+    cambios = datos.model_dump(exclude_unset=True)
+    if "email" in cambios and _email_en_uso(db, cambios["email"], excepto_id=usuario.id):
+        raise ErrorUsuario(409, _EMAIL_DUPLICADO)
+    for campo, valor in cambios.items():
+        setattr(usuario, campo, valor)
+
+    _guardar(db)
+    db.commit()
+    db.refresh(usuario)
+    return usuario
+
+
+def cambiar_mi_clave(db: Session, actual: Usuario, datos: MiClaveActualizar) -> None:
+    """Restablece la clave propia, confirmada con la clave vigente."""
+    usuario = db.scalar(select(Usuario).where(Usuario.id == actual.id).with_for_update())
+    if usuario is None:
+        raise ErrorUsuario(404, _NO_ENCONTRADO)
+
+    if not verificar_clave(datos.clave_actual, usuario.clave_hash):
+        raise ErrorUsuario(422, "La clave actual no es correcta")
+    if verificar_clave(datos.clave_nueva, usuario.clave_hash):
+        raise ErrorUsuario(422, "La clave nueva debe ser diferente de la actual")
+
+    usuario.clave_hash = hash_clave(datos.clave_nueva)
+    _guardar(db)
+    db.commit()
