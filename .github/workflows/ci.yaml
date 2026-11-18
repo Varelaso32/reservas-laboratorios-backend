@@ -49,7 +49,57 @@ jobs:
         run: ruff check app
 
   # ============================================================================
-  # 2. TEST: Ejecuta las pruebas de los endpoints y logica de negocio.
+  # 2. MIGRACIONES: aplica las migraciones sobre una base vacía y verifica que
+  #    el esquema resultante tenga todas las tablas y columnas del modelo.
+  #    Detecta el fallo que dejó QA sin login: modelos/tablas sin su migración,
+  #    que antes quedaba tapado por create_all y explotaba al desplegar.
+  # ============================================================================
+  migraciones:
+    name: migraciones
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      DATABASE_URL: postgresql+psycopg://reservas:ci_solo_pruebas@localhost:5432/reservas_migraciones
+
+    services:
+      db:
+        image: postgres:17
+        env:
+          POSTGRES_USER: reservas
+          POSTGRES_PASSWORD: ci_solo_pruebas
+          POSTGRES_DB: reservas_migraciones
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U reservas -d reservas_migraciones"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout del codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Aplicar migraciones desde cero
+        run: alembic upgrade head
+
+      - name: Verificar el esquema
+        run: python -m app.utils.esquema
+
+  # ============================================================================
+  # 3. TEST: Ejecuta las pruebas de los endpoints y logica de negocio.
   # ============================================================================
   test:
     name: test
@@ -106,7 +156,7 @@ jobs:
           path: coverage.xml
 
   # ============================================================================
-  # 3. SONAR: Analiza el codigo en SonarQube Cloud y espera el Quality Gate.
+  # 4. SONAR: Analiza el codigo en SonarQube Cloud y espera el Quality Gate.
   # Si el gate no pasa, este job falla y deja el PR en rojo.
   # ============================================================================
   sonar:

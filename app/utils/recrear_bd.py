@@ -33,11 +33,11 @@ def confirmado(valor: str | None) -> bool:
     return (valor or "").strip().lower() in CONFIRMACION_VALIDA
 
 
-def version_actual(tablas: set[str]) -> str | None:
+def version_actual(tablas: set[str], motor=None) -> str | None:
     """Versión de Alembic aplicada, o None si la base no está versionada."""
     if "alembic_version" not in tablas:
         return None
-    with engine.connect() as conn:
+    with (motor or engine).connect() as conn:
         return conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
 
 
