@@ -16,6 +16,7 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import inspect
 
 from app.core.database import engine
+from app.utils.datos_prueba import cargar
 from app.utils.migrar import migrar
 from app.utils.recrear_bd import CONFIRMACION_VALIDA, recrear, version_actual
 
@@ -37,7 +38,9 @@ def preparar() -> None:
         os.environ["CONFIRMAR_RECREAR_BD"] = "si"
         recrear()
 
-    migrar()
+    if migrar():
+        # Se adoptó un esquema anterior: se restauran los catálogos de ejemplo.
+        cargar()
 
 
 if __name__ == "__main__":
