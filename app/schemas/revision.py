@@ -31,6 +31,8 @@ class SolicitudPendienteOut(BaseModel):
     asistentes: int = Field(description="Cantidad de asistentes")
     creada_en: datetime = Field(description="Cuándo se registró")
     vencida: bool = Field(description="true si la hora de inicio ya pasó: ya no se puede aprobar")
+    prioridad: int = Field(description="Nivel de prioridad 0 a 3 (HU-12)")
+    prioridad_etiqueta: str = Field(description="ALTA, MEDIA o BAJA (HU-12)")
 
 
 class SolicitudDetalleOut(SolicitudPendienteOut):

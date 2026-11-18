@@ -34,6 +34,8 @@ def crear_admin() -> int:
             clave=os.environ["ADMIN_CLAVE"],
             rol=Rol.ADMIN,
             cargo=Cargo.ADMINISTRADOR_SISTEMA,
+            # HU-35: el ADMIN nace con permiso para autorizar fuera de la franja
+            puede_autorizar_especial=True,
         )
     except ValidationError as error:
         # Se muestran solo los mensajes: el input traería la clave en texto plano

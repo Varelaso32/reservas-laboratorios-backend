@@ -84,7 +84,9 @@ def bd_de_pruebas():
 def tablas_vacias(bd_de_pruebas):
     # TRUNCATE no dispara el trigger que protege la trazabilidad (es por fila)
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE usuario RESTART IDENTITY CASCADE"))
+        conn.execute(
+            text("TRUNCATE usuario, espacio, tipo_uso, tipo_recurso RESTART IDENTITY CASCADE")
+        )
     yield
 
 

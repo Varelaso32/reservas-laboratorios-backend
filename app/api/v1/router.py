@@ -2,14 +2,19 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     auth,
+    configuracion,
     decision,
     disponibilidad_espacio,
     espacios,
     historial,
     items,
+    notificaciones,
+    recursos,
     registro,
+    reportes,
     reservas,
     revision,
+    sanciones,
     solicitudes,
     usuarios,
 )
@@ -27,3 +32,8 @@ api_router.include_router(reservas.router, prefix="/reservas", tags=["reservas"]
 api_router.include_router(historial.router, tags=["historial"])
 api_router.include_router(usuarios.router, prefix="/usuarios", tags=["Usuarios"])
 api_router.include_router(registro.router, prefix="/auth", tags=["auth"])
+api_router.include_router(configuracion.router, prefix="/configuracion", tags=["configuración"])
+api_router.include_router(notificaciones.router, prefix="/notificaciones", tags=["notificaciones"])
+api_router.include_router(recursos.router, prefix="/recursos", tags=["recursos"])
+api_router.include_router(sanciones.router, prefix="/sanciones", tags=["sanciones"])
+api_router.include_router(reportes.router, prefix="/reportes", tags=["reportes"])

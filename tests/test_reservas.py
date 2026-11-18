@@ -10,7 +10,6 @@ from app.models.modelos import Espacio, Reserva, Solicitud, Trazabilidad, espaci
 from app.utils.fechas import ZONA_COLOMBIA
 from tests.conftest import cabecera
 
-
 URL = "/api/v1/reservas"
 
 
@@ -56,7 +55,7 @@ def test_solicitante_cancela_reserva_propia_y_registra_historial(client, solicit
     inicio = datetime.now(ZONA_COLOMBIA) + timedelta(hours=2)
     reserva_id, solicitud_id = _crear_reserva(solicitante, inicio)
 
-    respuesta = client.post(f"{URL}/{reserva_id}/cancelar", headers=cabecera(solicitante))
+    respuesta = client.post(f"{URL}/{reserva_id}/cancelar", json={"motivo": "Ya no puedo asistir"}, headers=cabecera(solicitante))
 
     assert respuesta.status_code == 200
     assert respuesta.json()["estado"] == "CANCELADA"
@@ -73,8 +72,8 @@ def test_solicitante_cancela_reserva_propia_y_registra_historial(client, solicit
 def test_cancelar_reserva_ya_cancelada_es_idempotente(client, solicitante):
     inicio = datetime.now(ZONA_COLOMBIA) + timedelta(hours=2)
     reserva_id, _ = _crear_reserva(solicitante, inicio)
-    primera = client.post(f"{URL}/{reserva_id}/cancelar", headers=cabecera(solicitante))
-    segunda = client.post(f"{URL}/{reserva_id}/cancelar", headers=cabecera(solicitante))
+    primera = client.post(f"{URL}/{reserva_id}/cancelar", json={"motivo": "Ya no puedo asistir"}, headers=cabecera(solicitante))
+    segunda = client.post(f"{URL}/{reserva_id}/cancelar", json={"motivo": "Ya no puedo asistir"}, headers=cabecera(solicitante))
 
     assert primera.status_code == 200
     assert segunda.status_code == 200
@@ -94,7 +93,7 @@ def test_solicitante_no_puede_cancelar_reserva_ajena(client, solicitante, crear_
     inicio = datetime.now(ZONA_COLOMBIA) + timedelta(hours=2)
     reserva_id, _ = _crear_reserva(otra_persona, inicio)
 
-    respuesta = client.post(f"{URL}/{reserva_id}/cancelar", headers=cabecera(solicitante))
+    respuesta = client.post(f"{URL}/{reserva_id}/cancelar", json={"motivo": "Ya no puedo asistir"}, headers=cabecera(solicitante))
 
     assert respuesta.status_code == 404
     with SessionLocal() as db:
@@ -108,7 +107,7 @@ def test_no_se_puede_cancelar_reserva_que_ya_inicio(client, solicitante):
     inicio = datetime.now(ZONA_COLOMBIA) - timedelta(minutes=30)
     reserva_id, _ = _crear_reserva(solicitante, inicio)
 
-    respuesta = client.post(f"{URL}/{reserva_id}/cancelar", headers=cabecera(solicitante))
+    respuesta = client.post(f"{URL}/{reserva_id}/cancelar", json={"motivo": "Ya no puedo asistir"}, headers=cabecera(solicitante))
 
     assert respuesta.status_code == 409
     with SessionLocal() as db:
@@ -123,7 +122,7 @@ def test_solo_solicitante_puede_cancelar_reserva(client, crear_usuario):
     inicio = datetime.now(ZONA_COLOMBIA) + timedelta(hours=2)
     reserva_id, _ = _crear_reserva(aprobador, inicio)
 
-    respuesta = client.post(f"{URL}/{reserva_id}/cancelar", headers=cabecera(aprobador))
+    respuesta = client.post(f"{URL}/{reserva_id}/cancelar", json={"motivo": "Ya no puedo asistir"}, headers=cabecera(aprobador))
 
     assert respuesta.status_code == 403
 
@@ -132,7 +131,7 @@ def test_mias_incluye_canceladas_solo_si_se_pide(client, solicitante):
     inicio = datetime.now(ZONA_COLOMBIA) + timedelta(hours=3)
     activa_id, _ = _crear_reserva(solicitante, inicio)
     cancelada_id, _ = _crear_reserva(solicitante, inicio + timedelta(days=1))
-    client.post(f"{URL}/{cancelada_id}/cancelar", headers=cabecera(solicitante))
+    client.post(f"{URL}/{cancelada_id}/cancelar", json={"motivo": "Cambio de horario"}, headers=cabecera(solicitante))
 
     por_defecto = client.get(f"{URL}/mias", headers=cabecera(solicitante))
     con_canceladas = client.get(f"{URL}/mias?incluir_canceladas=true", headers=cabecera(solicitante))
@@ -161,7 +160,7 @@ def test_agenda_admin_ve_reservas_del_dia_de_todos(client, admin, solicitante):
     segunda, _ = _crear_reserva(solicitante, manana + timedelta(hours=2))
     otro_dia, _ = _crear_reserva(solicitante, manana + timedelta(days=3))
     cancelada, _ = _crear_reserva(solicitante, manana + timedelta(hours=4))
-    client.post(f"{URL}/{cancelada}/cancelar", headers=cabecera(solicitante))
+    client.post(f"{URL}/{cancelada}/cancelar", json={"motivo": "Cambio de horario"}, headers=cabecera(solicitante))
 
     respuesta = client.get(f"{URL}/?fecha={manana.date().isoformat()}", headers=cabecera(admin))
 

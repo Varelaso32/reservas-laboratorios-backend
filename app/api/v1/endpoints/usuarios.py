@@ -7,6 +7,9 @@ from app.core.database import get_db
 from app.models.enums import Rol
 from app.models.modelos import Usuario
 from app.schemas.usuario import (
+    MiClaveActualizar,
+    MiCuentaActualizar,
+    ResultadoCambioOut,
     UsuarioActualizar,
     UsuarioCrear,
     UsuarioDetalleOut,
@@ -84,6 +87,49 @@ def listar_usuarios(
     db: Session = Depends(get_db),
 ):
     return usuarios.listar(db, skip, limit, rol, activo)
+
+
+@router.patch(
+    "/mi-cuenta",
+    response_model=UsuarioDetalleOut,
+    summary="Actualizar mis datos",
+    description=(
+        "Cambia el nombre o el correo del usuario con sesión (operador o admin). Solo los "
+        "campos enviados; `nombre` y `email` no aceptan null. No permite cambiar el rol, el "
+        "cargo ni la clave: eso es del ADMIN o de la operación de clave.\n\n"
+        "- Si el correo ya está en uso responde 409 (sin importar mayúsculas ni espacios).\n"
+        "- El correo se guarda en minúsculas y sin espacios."
+    ),
+    response_description="Usuario con los datos actualizados",
+    responses={**_401, **_409, **_422},
+)
+def actualizar_mi_cuenta(
+    datos: MiCuentaActualizar,
+    actual: Usuario = Depends(get_usuario_actual),
+    db: Session = Depends(get_db),
+):
+    return _ejecutar(db, usuarios.actualizar_mi_cuenta, actual, datos)
+
+
+@router.patch(
+    "/mi-cuenta/clave",
+    response_model=ResultadoCambioOut,
+    summary="Restablecer mi clave",
+    description=(
+        "Cambia la clave del usuario con sesión. Exige la clave vigente (si no coincide, "
+        "422) y la nueva debe tener de 8 a 128 caracteres y ser diferente de la actual. "
+        "La clave se guarda solo como hash; no se envía en ninguna respuesta."
+    ),
+    response_description="Mensaje de confirmación",
+    responses={**_401, **_422},
+)
+def cambiar_mi_clave(
+    datos: MiClaveActualizar,
+    actual: Usuario = Depends(get_usuario_actual),
+    db: Session = Depends(get_db),
+):
+    _ejecutar(db, usuarios.cambiar_mi_clave, actual, datos)
+    return {"mensaje": "Clave actualizada. Úsala en tu próximo inicio de sesión."}
 
 
 @router.get(

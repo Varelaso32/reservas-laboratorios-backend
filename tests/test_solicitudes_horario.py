@@ -60,7 +60,9 @@ def test_se_puede_reservar_cualquier_dia_dentro_del_horario(client, solicitante)
     assert respuesta.status_code == 201
 
 
-def test_otro_usuario_no_puede_pedir_horario_con_solicitud_pendiente(client, solicitante, crear_usuario):
+def test_otro_usuario_queda_rechazado_con_solicitud_pendiente(client, solicitante, crear_usuario):
+    """HU-30: si el horario ya tiene una solicitud pendiente de otra persona, la nueva
+    se rechaza automáticamente (mismo rol) y nunca queda pendiente en paralelo."""
     espacio_id = _crear_espacio()
     otro = crear_usuario("otro-solicitante@reservas.test")
     fecha = _proximo_domingo()
@@ -69,9 +71,10 @@ def test_otro_usuario_no_puede_pedir_horario_con_solicitud_pendiente(client, sol
     cruzada = client.post(URL, json=_cuerpo(espacio_id, fecha, "09:00", "11:00"), headers=cabecera(otro))
 
     assert primera.status_code == 201
-    assert cruzada.status_code == 409
+    assert cruzada.status_code == 201
+    assert cruzada.json()["estado"] == "RECHAZADA"
     # No se revela el número de la solicitud de otra persona
-    assert "#" not in cruzada.json()["detail"]
+    assert f"#{primera.json()['id']}" not in cruzada.json()["motivo_rechazo"]
 
 
 def test_mismo_usuario_recibe_el_numero_de_su_solicitud(client, solicitante):

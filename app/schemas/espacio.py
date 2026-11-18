@@ -40,6 +40,7 @@ class EspacioCrear(BaseModel):
                 "tipo": "LABORATORIO",
                 "capacidad": 25,
                 "ubicacion": "Bloque A, piso 2",
+                "amenidades": [1, 3],
             }
         },
     )
@@ -48,6 +49,20 @@ class EspacioCrear(BaseModel):
     tipo: TipoEspacio = Field(description="LABORATORIO o SALA")
     capacidad: int = Field(gt=0, description="Número máximo de personas")
     ubicacion: str | None = Field(None, max_length=200, description="Bloque y piso (opcional)")
+    amenidades: list[int] = Field(
+        default_factory=list,
+        description=(
+            "Ids de recursos del catálogo que quedan instalados en el espacio. Cada uno "
+            "descuenta una unidad del stock disponible"
+        ),
+    )
+
+    @field_validator("amenidades")
+    @classmethod
+    def _sin_repetidos(cls, valor: list[int]) -> list[int]:
+        if len(valor) != len(set(valor)):
+            raise ValueError("No se puede repetir la misma amenidad en un espacio")
+        return valor
 
     @field_validator("nombre")
     @classmethod
@@ -72,6 +87,20 @@ class EspacioActualizar(BaseModel):
     tipo: TipoEspacio | None = Field(None, description="LABORATORIO o SALA")
     capacidad: int | None = Field(None, gt=0, description="Número máximo de personas")
     ubicacion: str | None = Field(None, max_length=200, description="Bloque y piso; null para quitarla")
+    amenidades: list[int] | None = Field(
+        None,
+        description=(
+            "Ids de recursos que quedan instalados. Si se omite no se tocan; una lista vacía "
+            "libera todas las amenidades del espacio"
+        ),
+    )
+
+    @field_validator("amenidades")
+    @classmethod
+    def _sin_repetidos(cls, valor: list[int] | None) -> list[int] | None:
+        if valor is not None and len(valor) != len(set(valor)):
+            raise ValueError("No se puede repetir la misma amenidad en un espacio")
+        return valor
 
     @field_validator("nombre", "tipo", "capacidad", mode="before")
     @classmethod
@@ -108,5 +137,13 @@ class EspacioEstadoActualizar(BaseModel):
     activo: bool = Field(description="false desactiva el espacio; true lo reactiva")
 
 
+class AmenidadEspacioOut(BaseModel):
+    tipo_recurso_id: int = Field(description="Identificador del recurso")
+    nombre: str = Field(description="Nombre del recurso")
+
+
 class EspacioAdminOut(EspacioOut):
     activo: bool = Field(description="false si el espacio está desactivado")
+    amenidades: list[AmenidadEspacioOut] = Field(
+        default_factory=list, description="Recursos instalados de forma fija en el espacio"
+    )
