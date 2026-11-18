@@ -19,6 +19,8 @@ from app.core.database import engine
 REVISION_BASE = "0001_baseline"
 # Tabla que solo existe si la base viene de crear_tablas (esquema anterior).
 TABLA_ANTERIOR = "usuario"
+# Tablas que solo existen a partir de la migración 0002.
+TABLAS_POSTERIORES = ("tipo_uso", "notificacion", "recurso", "registro_configuracion")
 
 
 def es_base_anterior(tablas: set[str]) -> bool:
@@ -26,9 +28,24 @@ def es_base_anterior(tablas: set[str]) -> bool:
     return "alembic_version" not in tablas and TABLA_ANTERIOR in tablas
 
 
+def esta_contaminada(tablas: set[str]) -> bool:
+    """True si create_all creó tablas de la 0002+ antes de versionar el esquema.
+
+    Pasa en la base de QA: tiene tablas nuevas pero no las columnas ni los CHECK
+    de las migraciones, así que aplicarlas fallaría con "ya existe". En ese caso
+    hay que recrear el esquema (app.utils.recrear_bd) en vez de migrar.
+    """
+    return es_base_anterior(tablas) and any(t in tablas for t in TABLAS_POSTERIORES)
+
+
 def migrar() -> None:
     config = Config("alembic.ini")
     tablas = set(inspect(engine).get_table_names())
+    if esta_contaminada(tablas):
+        raise SystemExit(
+            "La base tiene tablas del Sprint 2 sin las migraciones aplicadas. "
+            "Definir RECREAR_BD=si (y CONFIRMAR_RECREAR_BD=si) para recrearla."
+        )
     if es_base_anterior(tablas):
         command.stamp(config, REVISION_BASE)
         print(f"Base existente marcada como {REVISION_BASE}")
