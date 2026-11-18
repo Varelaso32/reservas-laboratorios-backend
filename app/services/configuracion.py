@@ -5,7 +5,7 @@ Cada cambio queda registrado en `registro_configuracion` con usuario, fecha y ho
 """
 from datetime import time
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -171,13 +171,24 @@ def _aplicar_reglas(db: Session, espacio: Espacio, datos: ReglasEspacioActualiza
         ("ocupacion_minima", "ocupación mínima"),
     ):
         if campo in cambios:
-            setattr(espacio, campo, cambios[campo])
-            detalle.append(f"{etiqueta} {cambios[campo]}")
+            valor = cambios[campo]
+            setattr(espacio, campo, valor)
+            if valor is None:
+                detalle.append(
+                    f"{etiqueta} sin mínimo" if campo == "ocupacion_minima" else f"{etiqueta} sin límite"
+                )
+            elif campo == "separacion_min" and valor == 0:
+                detalle.append(f"{etiqueta} sin separación")
+            else:
+                detalle.append(f"{etiqueta} {valor}")
 
-    for campo in ("requiere_responsable", "admite_autorizacion_especial"):
+    for campo, etiqueta in (
+        ("requiere_responsable", "responsable obligatorio"),
+        ("admite_autorizacion_especial", "autorización especial"),
+    ):
         if campo in cambios:
             setattr(espacio, campo, cambios[campo])
-            detalle.append(f"{campo} {cambios[campo]}")
+            detalle.append(f"{etiqueta} {'activado' if cambios[campo] else 'desactivado'}")
 
     if espacio.ocupacion_minima is not None and espacio.ocupacion_minima > espacio.capacidad:
         raise ErrorConfiguracion(
@@ -305,24 +316,41 @@ def _registrar(
     )
 
 
-def historial(db: Session, espacio_id: int | None = None, limite: int = 50) -> list[dict]:
+def historial(
+    db: Session,
+    espacio_id: int | None = None,
+    limite: int = 50,
+    skip: int = 0,
+) -> dict:
+    filtros = []
+    if espacio_id is not None:
+        filtros.append(RegistroConfiguracion.espacio_id == espacio_id)
+
+    total = (
+        db.scalar(select(func.count()).select_from(RegistroConfiguracion).where(*filtros))
+        or 0
+    )
+
     consulta = (
         select(RegistroConfiguracion, Usuario.nombre)
         .join(Usuario, Usuario.id == RegistroConfiguracion.usuario_id)
+        .where(*filtros)
         .order_by(RegistroConfiguracion.fecha.desc(), RegistroConfiguracion.id.desc())
+        .offset(skip)
         .limit(limite)
     )
-    if espacio_id is not None:
-        consulta = consulta.where(RegistroConfiguracion.espacio_id == espacio_id)
     filas = db.execute(consulta).all()
-    return [
-        {
-            "id": registro.id,
-            "entidad": registro.entidad,
-            "espacio_id": registro.espacio_id,
-            "usuario": nombre,
-            "detalle": registro.detalle,
-            "fecha": registro.fecha.astimezone(ZONA_COLOMBIA),
-        }
-        for registro, nombre in filas
-    ]
+    return {
+        "total": total,
+        "items": [
+            {
+                "id": registro.id,
+                "entidad": registro.entidad,
+                "espacio_id": registro.espacio_id,
+                "usuario": nombre,
+                "detalle": registro.detalle,
+                "fecha": registro.fecha.astimezone(ZONA_COLOMBIA),
+            }
+            for registro, nombre in filas
+        ],
+    }

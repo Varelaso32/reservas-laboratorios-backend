@@ -76,8 +76,8 @@ REGLAS_POR_ESPACIO = {
     "Laboratorio de Redes": (time(7), time(22), "1,2,3,4,5,6", 4, 180, 10, 5, False, False),
     "Laboratorio de Electrónica": (time(7), time(20), "1,2,3,4,5", 3, 120, 15, 4, False, False),
     "Laboratorio de Software": (time(8), time(22), "1,2,3,4,5,6", 4, 240, 0, None, False, False),
-    "Sala de Juntas Norte": (time(8), time(18), "1,2,3,4,5", 3, 120, 15, None, True, False),
-    "Auditorio Pequeño": (time(8), time(20), "1,2,3,4,5,6", 2, 240, 30, None, True, True),
+    "Sala de Juntas Norte": (time(8), time(18), "1,2,3,4,5", 3, 120, 15, None, False, False),
+    "Auditorio Pequeño": (time(8), time(20), "1,2,3,4,5,6", 2, 240, 30, None, False, False),
 }
 
 # Anticipación máxima en días por rol de reserva (HU-37)

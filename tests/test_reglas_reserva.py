@@ -547,7 +547,66 @@ def test_admin_configura_reglas_y_queda_el_historial(client, admin):
     assert cuerpo["max_usos_dia"] == 4
     assert cuerpo["hora_apertura"] == "08:00:00"
     assert historial.status_code == 200
-    assert historial.json()[0]["usuario"] == admin.nombre
+    pagina = historial.json()
+    assert pagina["total"] >= 1
+    assert pagina["items"][0]["usuario"] == admin.nombre
+
+
+def test_historial_de_configuracion_pagina_de_10_en_10(client, admin):
+    espacio_id = _crear_espacio()
+    for indice in range(12):
+        respuesta = client.put(
+            f"{CONFIG}/espacios/{espacio_id}",
+            json={"max_usos_dia": indice + 1},
+            headers=cabecera(admin),
+        )
+        assert respuesta.status_code == 200
+
+    primera = client.get(
+        f"{CONFIG}/historial", params={"limite": 10}, headers=cabecera(admin)
+    )
+    segunda = client.get(
+        f"{CONFIG}/historial",
+        params={"limite": 10, "skip": 10},
+        headers=cabecera(admin),
+    )
+
+    assert primera.status_code == 200
+    assert segunda.status_code == 200
+    pagina_uno = primera.json()
+    pagina_dos = segunda.json()
+    assert len(pagina_uno["items"]) == 10
+    assert pagina_uno["total"] == len(pagina_uno["items"]) + len(pagina_dos["items"])
+    assert len(pagina_dos["items"]) == pagina_uno["total"] - 10
+    ids_uno = {registro["id"] for registro in pagina_uno["items"]}
+    ids_dos = {registro["id"] for registro in pagina_dos["items"]}
+    assert ids_uno.isdisjoint(ids_dos)
+
+
+def test_historial_describe_los_limites_vacios_sin_none(client, admin):
+    espacio_id = _crear_espacio()
+
+    respuesta = client.put(
+        f"{CONFIG}/espacios/{espacio_id}",
+        json={
+            "max_usos_dia": None,
+            "duracion_maxima_min": None,
+            "separacion_min": 0,
+            "ocupacion_minima": None,
+        },
+        headers=cabecera(admin),
+    )
+    historial = client.get(
+        f"{CONFIG}/historial", params={"espacio_id": espacio_id}, headers=cabecera(admin)
+    )
+
+    assert respuesta.status_code == 200
+    detalle = historial.json()["items"][0]["detalle"]
+    assert "None" not in detalle
+    assert "máximo de usos por día sin límite" in detalle
+    assert "duración máxima en minutos sin límite" in detalle
+    assert "separación en minutos sin separación" in detalle
+    assert "ocupación mínima sin mínimo" in detalle
 
 
 def test_franja_incompleta_se_rechaza(client, admin):
