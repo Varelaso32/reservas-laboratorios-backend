@@ -177,18 +177,19 @@ def actualizar_reglas_espacio(
     summary="Historial de cambios de configuración",
     description=(
         "**HU-36.8 y HU-37.6.** Solo el ADMIN. Devuelve los últimos cambios con el usuario, la "
-        "fecha y la hora. Se puede filtrar por espacio."
+        "fecha y la hora, paginados de 10 en 10 por defecto. Se puede filtrar por espacio."
     ),
-    response_description="Cambios de configuración, del más reciente al más antiguo",
+    response_description="Página de cambios de configuración, del más reciente al más antiguo",
     responses={**_401, **_403},
 )
 def historial_configuracion(
     espacio_id: int | None = Query(None, description="Filtrar por espacio"),
-    limite: int = Query(50, ge=1, le=200, description="Cuántos registros devolver"),
+    limite: int = Query(10, ge=1, le=200, description="Cuántos registros devolver"),
+    skip: int = Query(0, ge=0, description="Cuántos registros omitir (paginación)"),
     _admin: Usuario = Depends(requiere_rol(Rol.ADMIN)),
     db: Session = Depends(get_db),
 ):
-    return configuracion.historial(db, espacio_id, limite)
+    return configuracion.historial(db, espacio_id, limite, skip)
 
 
 @router.get(
