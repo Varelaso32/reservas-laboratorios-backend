@@ -1,5 +1,8 @@
 """Pruebas de las utilidades de arranque (migraciones y recreación de la base)."""
 
+import pytest
+
+from app.utils import arranque
 from app.utils.arranque import recrear_solicitado
 from app.utils.esquema import problemas_del_esquema, tablas_faltantes
 from app.utils.migrar import (
@@ -70,6 +73,65 @@ def test_recrear_solo_se_omite_si_la_base_esta_en_head():
     assert al_dia("0007_amenidades", "0007_amenidades") is True
     assert al_dia("0001_baseline", "0007_amenidades") is False
     assert al_dia(None, "0007_amenidades") is False
+
+
+def test_recrear_no_hace_nada_sin_la_doble_confirmacion(monkeypatch, capsys):
+    recreados: list[str] = []
+    monkeypatch.setattr(arranque, "recrear", lambda: recreados.append("recreado"))
+    monkeypatch.setenv("RECREAR_BD", "si")
+    monkeypatch.delenv("CONFIRMAR_RECREAR_BD", raising=False)
+
+    arranque._recrear_si_se_pidio("0001_baseline", "0007_amenidades")
+    assert recreados == []
+    assert "no se borra nada" in capsys.readouterr().out
+
+    monkeypatch.setenv("CONFIRMAR_RECREAR_BD", "si")
+    arranque._recrear_si_se_pidio("0001_baseline", "0007_amenidades")
+    assert recreados == ["recreado"]
+
+
+def test_recrear_no_se_ejecuta_si_la_base_ya_esta_en_head(monkeypatch):
+    recreados: list[str] = []
+    monkeypatch.setattr(arranque, "recrear", lambda: recreados.append("recreado"))
+    monkeypatch.setenv("RECREAR_BD", "si")
+    monkeypatch.setenv("CONFIRMAR_RECREAR_BD", "si")
+
+    arranque._recrear_si_se_pidio("0007_amenidades", "0007_amenidades")
+    assert recreados == []
+
+
+def test_el_arranque_falla_si_el_esquema_quedo_incompleto(monkeypatch):
+    monkeypatch.setattr(arranque, "verificar", lambda: ["falta la columna X"])
+    with pytest.raises(SystemExit) as error:
+        arranque._verificar_o_fallar()
+    assert "falta la columna X" in str(error.value)
+
+
+def test_el_arranque_continua_con_el_esquema_completo(monkeypatch):
+    monkeypatch.setattr(arranque, "verificar", list)
+    arranque._verificar_o_fallar()
+
+
+def test_preparar_migra_carga_catalogos_y_verifica(monkeypatch, capsys):
+    pasos: list[str] = []
+
+    class Inspector:
+        def get_table_names(self) -> list[str]:
+            return []
+
+    monkeypatch.setattr(arranque, "inspect", lambda motor: Inspector())
+    monkeypatch.setattr(arranque, "version_actual", lambda tablas: None)
+    monkeypatch.setattr(arranque, "migrar", lambda: pasos.append("migrar") or True)
+    monkeypatch.setattr(arranque, "cargar", lambda: pasos.append("cargar"))
+    monkeypatch.setattr(arranque, "verificar", list)
+    monkeypatch.delenv("RECREAR_BD", raising=False)
+
+    arranque.preparar()
+
+    assert pasos == ["migrar", "cargar"]
+    salida = capsys.readouterr().out
+    assert "RECREAR_BD=None" in salida
+    assert "Esquema verificado" in salida
 
 
 def test_un_esquema_al_dia_no_tiene_problemas():

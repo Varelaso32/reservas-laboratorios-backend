@@ -23,6 +23,7 @@ Uso: python -m app.utils.migrar
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import inspect, text
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import ProgrammingError
 
 from app.core.database import engine
@@ -107,7 +108,7 @@ def _respaldar(conn, nombre: str) -> str | None:
     return f"{respaldo} ({filas} filas)"
 
 
-def _adoptar(config: Config, tablas: set[str]) -> None:
+def _adoptar(config: Config, tablas: set[str], motor=None) -> None:
     """Elimina las tablas del Sprint 2 y marca el esquema base como baseline.
 
     Las tablas que tengan datos se copian antes a `respaldo_<tabla>`: la
@@ -115,7 +116,7 @@ def _adoptar(config: Config, tablas: set[str]) -> None:
     """
     sobrantes = sorted(tablas & TABLAS_POSTERIORES)
     respaldos: list[str] = []
-    with engine.begin() as conn:
+    with (motor or engine).begin() as conn:
         for nombre in sobrantes:
             respaldo = _respaldar(conn, nombre)
             if respaldo:
@@ -130,17 +131,18 @@ def _adoptar(config: Config, tablas: set[str]) -> None:
         print("Tablas con datos copiadas antes de eliminarlas: " + ", ".join(respaldos))
 
 
-def migrar() -> bool:
+def migrar(config: Config | None = None, motor: Engine | None = None) -> bool:
     """Deja el esquema al día. Devuelve True si tuvo que adoptar un esquema viejo."""
-    config = Config("alembic.ini")
-    inspector = inspect(engine)
+    config = config or Config("alembic.ini")
+    motor = motor or engine
+    inspector = inspect(motor)
     tablas = set(inspector.get_table_names())
     columnas = _columnas_usuario(inspector)
-    version = version_actual(tablas)
+    version = version_actual(tablas, motor)
 
     adoptado = False
     if necesita_adoptar(tablas, columnas, version):
-        _adoptar(config, tablas)
+        _adoptar(config, tablas, motor)
         adoptado = True
     elif es_base_anterior(tablas):
         command.stamp(config, REVISION_BASE)
