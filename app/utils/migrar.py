@@ -12,6 +12,7 @@ Uso: python -m app.utils.migrar
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import inspect
+from sqlalchemy.exc import ProgrammingError
 
 from app.core.database import engine
 
@@ -49,7 +50,16 @@ def migrar() -> None:
     if es_base_anterior(tablas):
         command.stamp(config, REVISION_BASE)
         print(f"Base existente marcada como {REVISION_BASE}")
-    command.upgrade(config, "head")
+    try:
+        command.upgrade(config, "head")
+    except ProgrammingError as exc:
+        if "already exists" in str(exc.orig):
+            raise SystemExit(
+                "La base quedó a medio migrar: tiene tablas sin la versión de Alembic "
+                "que las creó. Definir RECREAR_BD=si (y CONFIRMAR_RECREAR_BD=si) para "
+                "recrearla, o aplicar la migración a mano."
+            ) from exc
+        raise
     print("Migraciones al día")
 
 
