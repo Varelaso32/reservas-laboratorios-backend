@@ -25,12 +25,20 @@ RUN pip install -r requirements.txt
 # Solo el código de la app: ni el .venv de Windows ni el .env entran a la imagen
 COPY app ./app
 
+# Migraciones: el arranque las aplica antes de levantar uvicorn
+COPY alembic.ini ./
+COPY migrations ./migrations
+
 EXPOSE 8000
 
 # Arranque en cualquier entorno:
 # - $PORT: Render (u otro PaaS) inyecta el puerto; local se usa 8000.
+# - recrear_bd: solo si RECREAR_BD=si y la base aún no está versionada (QA).
+# - migrar: marca como baseline las bases antiguas y aplica Alembic hasta head.
 # - crear_tablas: idempotente (tablas + btree_gist + trigger de trazabilidad).
 # - crear_admin: solo si las tres variables ADMIN_* están definidas.
-CMD python -m app.utils.crear_tablas \
+CMD if [ "$RECREAR_BD" = "si" ]; then python -m app.utils.recrear_bd; fi \
+    && python -m app.utils.migrar \
+    && python -m app.utils.crear_tablas \
     && if [ -n "$ADMIN_EMAIL" ] && [ -n "$ADMIN_NOMBRE" ] && [ -n "$ADMIN_CLAVE" ]; then python -m app.utils.crear_admin || echo "crear_admin fallo (no bloquea el arranque)"; fi \
     && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
