@@ -1,7 +1,13 @@
 """Pruebas de las utilidades de arranque (migraciones y recreación de la base)."""
 
 from app.utils.arranque import recrear_solicitado
-from app.utils.migrar import es_base_anterior, esta_contaminada
+from app.utils.migrar import (
+    TABLAS_BASE,
+    TABLAS_POSTERIORES,
+    es_base_anterior,
+    esta_contaminada,
+    necesita_adoptar,
+)
 from app.utils.recrear_bd import al_dia, confirmado
 
 BASE = {"usuario", "espacio", "solicitud", "reserva", "trazabilidad"}
@@ -22,6 +28,21 @@ def test_base_vacia_se_migra_desde_cero():
 def test_base_con_tablas_del_sprint_2_sin_migraciones_esta_contaminada():
     assert esta_contaminada({*BASE, "tipo_uso"}) is True
     assert esta_contaminada({*BASE, "notificacion"}) is True
+
+
+def test_se_adopta_la_base_con_tablas_del_sprint_2_sin_la_columna():
+    assert necesita_adoptar({*BASE, "tipo_uso"}, set()) is True
+    assert necesita_adoptar({*BASE, "tipo_uso", "alembic_version"}, set()) is True
+
+
+def test_no_se_adopta_una_base_sana_ni_una_vacia():
+    assert necesita_adoptar({*BASE, "tipo_uso"}, {"puede_autorizar_especial"}) is False
+    assert necesita_adoptar(BASE, set()) is False
+    assert necesita_adoptar(set(), set()) is False
+
+
+def test_las_tablas_base_y_las_posteriores_no_se_solapan():
+    assert TABLAS_BASE & TABLAS_POSTERIORES == set()
 
 
 def test_base_limpia_o_versionada_no_esta_contaminada():
