@@ -1,4 +1,10 @@
-"""Crea las tablas en PostgreSQL. Se puede correr varias veces sin problema.
+"""Crea las tablas en PostgreSQL para desarrollo local y pruebas.
+
+**No se usa en los despliegues**: en Render el esquema lo administra Alembic
+(`app.utils.arranque`). `create_all` no versiona ni altera columnas, así que
+usarlo contra una base desplegada deja tablas sin la versión de Alembic.
+
+Se puede correr varias veces sin problema.
 
 Uso: docker compose exec api python -m app.utils.crear_tablas
 """

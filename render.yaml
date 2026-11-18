@@ -8,7 +8,7 @@ services:
     name: reservas-ecci-api-qa
     branch: qa
     plan: free
-    healthCheckPath: /
+    healthCheckPath: /salud
     envVars:
       # URL de Neon (formato postgresql+psycopg://...?sslmode=require): se pega al crear el blueprint.
       - key: DATABASE_URL
@@ -31,7 +31,7 @@ services:
     name: reservas-ecci-api-prod
     branch: main
     plan: free
-    healthCheckPath: /
+    healthCheckPath: /salud
     envVars:
       - key: DATABASE_URL
         sync: false
