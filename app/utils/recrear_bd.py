@@ -6,8 +6,11 @@ columnas ni los CHECK de las migraciones.
 
 Por seguridad hay dos condiciones:
 - exige CONFIRMAR_RECREAR_BD=si (borra todos los datos);
-- si la base ya está versionada por Alembic no hace nada, así que dejar la
+- no hace nada si la base ya está migrada hasta `head`, así que dejar la
   variable definida no borra la base en cada despliegue.
+
+Si la base quedó a medio migrar (versión distinta de `head`), también la
+recrea, porque las migraciones no se pueden aplicar dos veces.
 
 Uso:
     CONFIRMAR_RECREAR_BD=si python -m app.utils.recrear_bd
@@ -17,6 +20,7 @@ import os
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import inspect, text
 
 from app.core.database import engine
@@ -29,8 +33,16 @@ def confirmado(valor: str | None) -> bool:
     return (valor or "").strip().lower() in CONFIRMACION_VALIDA
 
 
-def ya_versionada(tablas: set[str]) -> bool:
-    return "alembic_version" in tablas
+def version_actual(tablas: set[str]) -> str | None:
+    """Versión de Alembic aplicada, o None si la base no está versionada."""
+    if "alembic_version" not in tablas:
+        return None
+    with engine.connect() as conn:
+        return conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
+
+
+def al_dia(version: str | None, head: str) -> bool:
+    return version == head
 
 
 def recrear() -> None:
@@ -38,15 +50,19 @@ def recrear() -> None:
         raise SystemExit(
             "Falta CONFIRMAR_RECREAR_BD=si: este comando borra todos los datos de la base."
         )
-    if ya_versionada(set(inspect(engine).get_table_names())):
-        print("La base ya está versionada con Alembic; no se recrea.")
+
+    config = Config("alembic.ini")
+    head = ScriptDirectory.from_config(config).get_current_head()
+    tablas = set(inspect(engine).get_table_names())
+    if al_dia(version_actual(tablas), head):
+        print(f"La base ya está migrada en {head}; no se recrea.")
         return
 
     with engine.begin() as conn:
         conn.execute(text("DROP SCHEMA public CASCADE"))
         conn.execute(text("CREATE SCHEMA public"))
 
-    command.upgrade(Config("alembic.ini"), "head")
+    command.upgrade(config, "head")
     cargar()
     print("Esquema recreado, migrado y con datos de prueba.")
 
