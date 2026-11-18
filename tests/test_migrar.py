@@ -1,19 +1,32 @@
 """Pruebas de las utilidades de arranque (migraciones y recreación de la base)."""
 
-from app.utils.migrar import es_base_anterior
-from app.utils.recrear_bd import confirmado, ya_versionada
+from app.utils.migrar import es_base_anterior, esta_contaminada
+from app.utils.recrear_bd import al_dia, confirmado
+
+BASE = {"usuario", "espacio", "solicitud", "reserva", "trazabilidad"}
 
 
 def test_base_creada_con_crear_tablas_se_marca_como_anterior():
-    assert es_base_anterior({"usuario", "espacio", "solicitud"}) is True
+    assert es_base_anterior(BASE) is True
 
 
 def test_base_ya_versionada_no_se_marca():
-    assert es_base_anterior({"usuario", "alembic_version"}) is False
+    assert es_base_anterior({*BASE, "alembic_version"}) is False
 
 
 def test_base_vacia_se_migra_desde_cero():
     assert es_base_anterior(set()) is False
+
+
+def test_base_con_tablas_del_sprint_2_sin_migraciones_esta_contaminada():
+    assert esta_contaminada({*BASE, "tipo_uso"}) is True
+    assert esta_contaminada({*BASE, "notificacion"}) is True
+
+
+def test_base_limpia_o_versionada_no_esta_contaminada():
+    assert esta_contaminada(BASE) is False
+    assert esta_contaminada({*BASE, "tipo_uso", "alembic_version"}) is False
+    assert esta_contaminada(set()) is False
 
 
 def test_recrear_exige_confirmacion_explicita():
@@ -24,6 +37,7 @@ def test_recrear_exige_confirmacion_explicita():
     assert confirmado(" SI ") is True
 
 
-def test_recrear_no_toca_una_base_ya_versionada():
-    assert ya_versionada({"alembic_version", "usuario"}) is True
-    assert ya_versionada({"usuario"}) is False
+def test_recrear_solo_se_omite_si_la_base_esta_en_head():
+    assert al_dia("0007_amenidades", "0007_amenidades") is True
+    assert al_dia("0001_baseline", "0007_amenidades") is False
+    assert al_dia(None, "0007_amenidades") is False

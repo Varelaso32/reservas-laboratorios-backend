@@ -37,7 +37,7 @@ EXPOSE 8000
 # - migrar: marca como baseline las bases antiguas y aplica Alembic hasta head.
 # - crear_tablas: idempotente (tablas + btree_gist + trigger de trazabilidad).
 # - crear_admin: solo si las tres variables ADMIN_* están definidas.
-CMD if [ "$RECREAR_BD" = "si" ]; then python -m app.utils.recrear_bd; fi \
+CMD if [ "$RECREAR_BD" = "si" ]; then CONFIRMAR_RECREAR_BD=si python -m app.utils.recrear_bd; fi \
     && python -m app.utils.migrar \
     && python -m app.utils.crear_tablas \
     && if [ -n "$ADMIN_EMAIL" ] && [ -n "$ADMIN_NOMBRE" ] && [ -n "$ADMIN_CLAVE" ]; then python -m app.utils.crear_admin || echo "crear_admin fallo (no bloquea el arranque)"; fi \
